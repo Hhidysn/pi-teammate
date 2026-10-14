@@ -87,6 +87,13 @@ export const DEFAULT_BLOCKED_SUBAGENT_ACTIONS = [
 
 export const DEFAULT_REFERENCES_DIR = "~/.agents/skills/i-wish/references";
 
+/**
+ * 编排器的 bash 策略：none = 不给；allowlist = 只放行只读命令白名单。
+ * 注意这是启发式，不是安全保证：被放行的命令自身可能调项目脚本写文件。
+ */
+export const BASH_POLICIES = ["none", "allowlist"] as const;
+export type BashPolicy = (typeof BASH_POLICIES)[number];
+
 /** 默认没有额外协助者；用配置文件加（会进子代理允许名单与 policy 文本）。 */
 export const DEFAULT_HELPERS: readonly string[] = [];
 
@@ -105,6 +112,10 @@ export interface TeammateConfig {
 	allowNamedWorkflows: boolean;
 	/** subagent 上被拦的 action。 */
 	blockedSubagentActions: string[];
+	/** 编排器的 bash 策略。 */
+	bashPolicy: BashPolicy;
+	/** 在默认只读名单之外额外放行的命令前缀（会削弱保证）。 */
+	bashAllow: string[];
 }
 
 export interface LoadedConfig {
@@ -129,6 +140,8 @@ export function defaultConfig(): TeammateConfig {
 		referencesDir: DEFAULT_REFERENCES_DIR,
 		allowNamedWorkflows: false,
 		blockedSubagentActions: [...DEFAULT_BLOCKED_SUBAGENT_ACTIONS],
+		bashPolicy: "none",
+		bashAllow: [],
 	};
 }
 
@@ -215,6 +228,13 @@ export function mergeConfig(
 	if (blocked) next.blockedSubagentActions = blocked;
 	const allowNamedWorkflows = readBoolean(raw, "allowNamedWorkflows", where, warnings);
 	if (allowNamedWorkflows !== undefined) next.allowNamedWorkflows = allowNamedWorkflows;
+	if (Object.hasOwn(raw, "bashPolicy")) {
+		const value = raw.bashPolicy;
+		if (typeof value === "string" && (BASH_POLICIES as readonly string[]).includes(value)) next.bashPolicy = value as BashPolicy;
+		else warnings.push(`${where}: bashPolicy 只能是 ${BASH_POLICIES.join(" 或 ")}，已忽略`);
+	}
+	const bashAllow = readStringArray(raw, "bashAllow", where, warnings, { allowEmpty: true });
+	if (bashAllow) next.bashAllow = bashAllow;
 	if (Object.hasOwn(raw, "referencesDir")) {
 		const value = raw.referencesDir;
 		if (typeof value === "string") next.referencesDir = value;
@@ -229,6 +249,8 @@ export function mergeConfig(
 		"blockedSubagentActions",
 		"referencesDir",
 		"allowNamedWorkflows",
+		"bashPolicy",
+		"bashAllow",
 	]);
 	for (const key of Object.keys(raw)) if (!known.has(key)) warnings.push(`${where}: 未知字段 ${key}，已忽略`);
 	return next;
@@ -259,6 +281,7 @@ export function loadConfig(agentDir: string, cwd: string): LoadedConfig {
 	const projectOverride = readJsonFile(join(cwd, ".pi", CONFIG_FILE), warnings, sources);
 	if (projectOverride !== undefined) config = mergeConfig(config, projectOverride, warnings, "项目配置");
 	config.referencesDir = config.referencesDir.trim() === "" ? "" : expandHome(config.referencesDir);
+	if (config.bashPolicy === "allowlist" && !config.keepTools.includes("bash")) config.keepTools.push("bash");
 	if (config.referencesDir !== "" && !isAbsolute(config.referencesDir)) {
 		warnings.push(`referencesDir 不是绝对路径（${config.referencesDir}），已忽略`);
 		config.referencesDir = "";

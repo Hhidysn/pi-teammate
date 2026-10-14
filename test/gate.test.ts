@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { defaultConfig } from "../src/config.ts";
 import {
+	bashBlockReason,
 	childAllowedTools,
 	effectiveKeepTools,
 	modeStatusText,
@@ -79,6 +80,24 @@ test("状态文案：开启时列工具，关闭时给得出原因", () => {
 	assert.ok(noMarker.includes("标记未激活"), noMarker);
 	const turnedOff = modeStatusText({ ...base, mode: "off", engaged: false, markerActive: true, activeTools: ["read"] });
 	assert.ok(turnedOff.includes("/orchestrator off 关掉了"), turnedOff);
+});
+
+test("只读 bash：放行看代码/看历史，拦住写入与命令替换", () => {
+	const config = defaultConfig();
+	config.bashPolicy = "allowlist";
+	assert.equal(bashBlockReason("git diff --stat", config), undefined);
+	assert.equal(bashBlockReason("git log --oneline -5 | head -3", config), undefined);
+	assert.equal(bashBlockReason("rg -n TODO src/", config), undefined);
+	assert.ok(bashBlockReason("git push origin main", config)?.includes("写入/破坏性"));
+	assert.ok(bashBlockReason("echo hi > out.txt", config)?.includes("写入/破坏性"));
+	assert.ok(bashBlockReason("cat a.txt | tee b.txt", config)?.includes("写入/破坏性"));
+	assert.ok(bashBlockReason("sed -i s/a/b/ f.txt", config)?.includes("写入/破坏性"));
+	assert.ok(bashBlockReason("echo $(cat x)", config)?.includes("写入/破坏性"));
+	assert.ok(bashBlockReason("npm test", config)?.includes("不在只读白名单里"));
+	assert.ok(bashBlockReason("pwsh tools/run_godot_tests.ps1", config)?.includes("不在只读白名单里"));
+	config.bashAllow = ["npm test"];
+	assert.equal(bashBlockReason("npm test", config), undefined, "配置里额外放行的前缀生效");
+	assert.ok(bashBlockReason("", config) === "空命令。");
 });
 
 test("子代理工具并集剔除派发与管理类工具（禁止再往下派）", () => {

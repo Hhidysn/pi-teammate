@@ -93,6 +93,72 @@ export function modeStatusText(input: {
 	return `编排器模式：关闭（${input.mode}）｜原因：${why}｜${switchHint}`;
 }
 
+/** 只读命令白名单（前缀匹配）。默认只覆盖「看代码/看历史」，不放行跑测试与构建。 */
+export const DEFAULT_BASH_ALLOW: readonly string[] = [
+	"git status",
+	"git diff",
+	"git log",
+	"git show",
+	"git ls-files",
+	"git ls-remote",
+	"git rev-parse",
+	"git blame",
+	"git branch",
+	"git remote",
+	"git stash list",
+	"ls",
+	"cat",
+	"head",
+	"tail",
+	"wc",
+	"rg",
+	"grep",
+	"find",
+	"fd",
+	"tree",
+	"pwd",
+	"stat",
+	"file",
+	"which",
+];
+
+/** 无论如何都拒的模式：写入、破坏性操作、命令替换。 */
+const BASH_DENY_PATTERNS: readonly RegExp[] = [
+	/[\$`]\s*\(/, // $( ) 与 ` 命令替换
+	/[<>]\s*\(/, // <( ) / >( ) 进程替换
+	/(^|[^0-9])>{1,2}\s*\S/, // 重定向到文件
+	/\|\s*tee\b/,
+	/\bsed\s+-i/,
+	/\bperl\s+-i/,
+	/\b(rm|rmdir|mv|cp|mkdir|touch|chmod|chown|truncate|dd|ln)\b/,
+	/\bgit\s+(add|commit|push|checkout|switch|reset|clean|apply|restore|rm|mv|stash\s+(pop|drop|clear))\b/,
+	/\bgit\s+branch\s+-[dDmM]/,
+	/\b(npm|pnpm|yarn|bun)\s+(i|install|ci|add|remove|uninstall)\b/,
+	/\bpip3?\s+install\b/,
+	/--(fix|write|output|out-dir|emit)\b/,
+];
+
+/**
+ * 只读 bash 准入：把命令按 && / || / ; / 换行 / 管道拆段，逐段查拒绝模式与白名单。
+ * 这是启发式，不保证：被放行的命令（以及它们调起的项目脚本）仍可能写文件。
+ */
+export function bashBlockReason(command: unknown, config: TeammateConfig): string | undefined {
+	if (typeof command !== "string" || command.trim() === "") return "空命令。";
+	for (const pattern of BASH_DENY_PATTERNS) {
+		if (pattern.test(command)) return `命令里含写入/破坏性/命令替换模式（${pattern.source}），编排器模式下已禁用。要看结论请派 verify 角色。`;
+	}
+	const allowed = [...DEFAULT_BASH_ALLOW, ...config.bashAllow];
+	const segments = command
+		.split(/\|\||&&|;|\n|\|/)
+		.map((segment) => segment.trim())
+		.filter((segment) => segment !== "");
+	for (const segment of segments) {
+		const ok = allowed.some((prefix) => segment === prefix || segment.startsWith(`${prefix} `));
+		if (!ok) return `「${segment}」不在只读白名单里。编排器只能看（git 历史/diff、列目录、读文件、搜索）；跑测试或改东西请派 verify / worker。`;
+	}
+	return undefined;
+}
+
 /** 子代理不允许再派发：能力天花板里剔掉这些名字。 */
 export const CHILD_DENIED_TOOLS: readonly string[] = [
 	SUBAGENT_TOOL,

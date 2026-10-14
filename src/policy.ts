@@ -24,6 +24,11 @@ export function buildPolicy(input: PolicyInput): string {
 	const usable = keepTools.filter((name) => name !== ORCHESTRATOR_TOOL);
 	lines.push(`- 只有这些：${usable.join("、")}。其它调用会被硬拦（不是提示词约束）。`);
 	lines.push("- 派发工具已就绪，直接调 subagent；不要调用 subagents_enable。");
+	if (config.bashPolicy === "allowlist") {
+		lines.push(
+			"- bash 开了只读白名单：`git status/diff/log/show/ls-files/branch`、`ls/cat/head/tail/wc/rg/grep/find/tree/stat` 等可用；重定向、`sed -i`、`rm/mv/cp`、`git commit/push`、包安装、`--fix/--write`、命令替换全部会被拦。想要跑测试或改东西，派对应角色。",
+		);
+	}
 	lines.push("");
 
 	lines.push("### 角色与派活时机");

@@ -23,6 +23,7 @@ import {
 } from "./config.ts";
 import { buildPolicy } from "./policy.ts";
 import {
+	bashBlockReason,
 	childAllowedTools,
 	effectiveKeepTools,
 	modeStatusText,
@@ -324,6 +325,10 @@ export default function piTeammateExtension(pi: ExtensionAPI): void {
 		if (event.toolName === SUBAGENT_TOOL) {
 			const subagentReason = subagentBlockReason(event.input, cfg);
 			if (subagentReason) return { block: true, reason: subagentReason };
+		}
+		if (event.toolName === "bash" && cfg.bashPolicy === "allowlist") {
+			const bashReason = bashBlockReason((event.input as { command?: unknown }).command, cfg);
+			if (bashReason) return { block: true, reason: bashReason };
 		}
 		return undefined;
 	});

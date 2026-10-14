@@ -58,6 +58,8 @@ pi --tools read,grep,find,ls,subagent,bg_wait,web_search,fetch_content,source_ch
   "helpers": ["council-gpt", "council-deepseek"],
   "referencesDir": "~/.agents/skills/i-wish/references",
   "allowNamedWorkflows": false,
+  "bashPolicy": "none",
+  "bashAllow": [],
   "blockedSubagentActions": ["create", "update", "delete", "eject", "disable", "enable", "reset", "refine", "refine.show", "refine.rollback", "schedule.create", "schedule.update", "schedule.delete"]
 }
 ```
@@ -69,18 +71,22 @@ pi --tools read,grep,find,ls,subagent,bg_wait,web_search,fetch_content,source_ch
 | `roles` | 角色 → 子代理名。默认复用已有 agent 定义；`verify` 需要能跑命令的角色。 |
 | `helpers` | 额外可派的协助者（不进五步流程），会进子代理允许名单和 policy 文本。例如 `["council-gpt", "council-deepseek"]`。 |
 | `referencesDir` | i-wish 参考目录；存在时注入「设计与拆分读 plan.md、验证读 build.md」的指引。 |
-| `allowNamedWorkflows` | 默认 `false`：`subagent` 的命名 workflow（如 `run-ci`）会让宿主直接执行命令，模式内禁用。 |
+| `allowNamedWorkflows` | 默认 `false`：`subagent` 的命名 workflow（如 `run-ci`）会让宿主直接执行命令，模式内禁用。文件路径脚本不受此限制。 |
+| `bashPolicy` | `none`（默认，编排器没有 bash）或 `allowlist`（只读命令白名单；需要时自动把 `bash` 加进 `keepTools`）。 |
+| `bashAllow` | 在默认只读名单之外**额外**放行的命令前缀（例如 `npm test`）。加任何东西都会削弱保证。 |
 | `blockedSubagentActions` | `subagent` 上被拦的 action，默认是会写宿主配置或计划表的那批。 |
 
 ## 编排器在模式内能做什么
 
 - 保留：`read`、`grep`、`find`、`ls`（看文件）、`web_search`、`fetch_content`、`source_check`（核一手来源）、`subagent`、`bg_wait`、`subagent_supervisor`（派活与收活）。
+- `bashPolicy: "allowlist"` 时额外给 `bash`，但**只放行只读命令**：`git status/diff/log/show/ls-files/branch`、`ls/cat/head/tail/wc/rg/grep/find/tree/stat` 等；重定向、`sed -i`、`rm/mv/cp`、`git commit/push`、包安装、`--fix/--write`、命令替换一律拦下。实测：`git log --oneline -2` 放行，`git push origin main` 被拦。
 - 拦掉：`bash`、`powershell`、`edit`、`write` 等一切白名单外的工具。
 - 子代理侧：注册 pi-subagents 的会话级能力天花板——只能派映射里的角色，且子代理拿不到派发工具（不会出现孙代理）。
 
 ## 已知边界
 
-- **编排器不能自己跑命令**，所以全量测试、`git diff` 核对由 `verify` 角色执行；编排器读它交回的结论与输出位置。需要看代码分布时派 `scout`。
+- **编排器只有只读的「看」能力**：默认没有 bash；开了 `bashPolicy: "allowlist"` 也只能看（git 历史/diff、读文件、搜索），**跑不了测试**（`npm test`、`pwsh .../run_godot_tests.ps1` 这类入口不在默认名单里），也改不了文件。全量测试由 `verify` 角色跑并交回命令、cwd、退出码与输出位置；需要看代码分布时派 `scout`。
+- **只读 bash 是启发式，不是安全保证**：被放行的命令可能自己调项目脚本写文件（`npm test` 的 pretest/posttest、构建产物、git 的 textconv/外部 diff）。默认名单只放「看」；要跑测试就用 `bashAllow` 显式加，加的时候就接受了这个风险。
 - **派发形态**：优先 `subagent({agent, task})`、`tasks: [...]`（并行）、`chain: [...]`（顺序）；内联 workflow（`workflow: true` + 回复正文里的 js 块）在真实会话里失败过，不建议；命名 workflow（`run-ci` 等）会执行宿主命令、已被拦；文件路径脚本（`workflow: "./flow.js"`）没有宿主命令权限，放行。
 - **不能写文件**：设计文档、任务记录这类产物由 `worker` 落地，编排器审内容。
 - 能力天花板依赖 pi-subagents 的公共接口（`src/api/capability-ceiling.js`，按 globalThis 注册表共享）。找不到时会警告，此时用角色档案的 `maxSubagentDepth: 1` 兜底。

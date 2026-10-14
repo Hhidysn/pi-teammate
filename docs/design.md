@@ -23,7 +23,7 @@
 
 ### 模式内的工具（白名单）
 
-`keepTools`（默认 `read`、`grep`、`find`、`ls`、`web_search`、`fetch_content`、`source_check`、`subagent`、`bg_wait`、`subagent_supervisor`）∩ 已注册，加标记，加 pi-subagents 的冷启动加载器（若注册了）。白名单同时是门禁依据，不存在第二份配置。
+`keepTools`（默认 `read`、`grep`、`find`、`ls`、`web_search`、`fetch_content`、`source_check`、`subagent`、`bg_wait`、`subagent_supervisor`）∩ 已注册，加标记，加 pi-subagents 的冷启动加载器（若注册了）。白名单同时是门禁依据，不存在第二份配置。`bashPolicy: "allowlist"` 时自动把 `bash` 加进白名单，并在 `tool_call` 里再做一层命令级只读准入。
 
 ### 状态
 
@@ -33,7 +33,7 @@
 
 1. **Reduction**：`before_agent_start` 幂等把活跃集和 `event.systemPromptOptions.selectedTools` 都钉成白名单。同时写 `selectedTools` 是因为 pi 的规则是「显式改 selectedTools 者优先，否则以实时 loadout 为准」；加载器留在白名单里是为了不与 pi-subagents 的每轮重放抢声明（顺序无关）。
 2. **Gate**：`tool_call` 拦白名单外的一切调用（嵌套调用也走这里），返回派发引导。
-3. **参数级准入**：`subagent` 再按参数拦——`workflow` 为**命名资源**时（如 `run-ci` 走 `runs.host` → `spawn(shell)`）默认禁用；文件路径形式的脚本（`./flow.js`）没有宿主命令权限，放行；`blockedSubagentActions` 里的 action 会写宿主配置或计划表，也禁用。策略文本另外指明派发形态：`tasks`（并行）/`chain`（顺序）优先，不用内联 js 块。
+3. **参数级准入**：`subagent` 再按参数拦——`workflow` 为**命名资源**时（如 `run-ci` 走 `runs.host` → `spawn(shell)`）默认禁用；文件路径形式的脚本（`./flow.js`）没有宿主命令权限，放行；`blockedSubagentActions` 里的 action 会写宿主配置或计划表，也禁用。策略文本另外指明派发形态：`tasks`（并行）/`chain`（顺序）优先，不用内联 js 块。开启只读 bash 时，`bash` 的命令也要过参数级准入（拆段后逐段查拒绝模式与白名单）。
 4. **子代理能力天花板**：进入模式时注册 pi-subagents 的会话级 `capabilityCeiling`（`allowedTools` = 当前注册工具剔除 `subagent`/`subagents_enable`/`subagent_supervisor`/`bg_wait`/标记；`allowedAgents` = 映射角色）。子代理因此拿不到派发工具（`fanoutAuthorized` 为假），也不会出现孙代理。退出时 `dispose()`。
 5. **Policy**：`before_agent_start` 往 `systemPromptOptions.sections.pi_teammate` 写一段规则（身份、角色与派活时机、派活契约、i-wish 阶段对齐、汇总格式）。进入模式时算一次，逐轮复用，保持提示前缀稳定。
 6. **就绪检查**：没有 `subagent`（pi-subagents 未装/未加载）时不进入模式并提示；能力天花板接口取不到时警告，提示用角色档案 `maxSubagentDepth: 1` 兜底；白名单里含写工具时提示「等于放弃不写代码的保证」。
@@ -122,7 +122,8 @@ G2 未覆盖：GUI 预设矩阵与 `/reload`、树导航后的状态（需要交
 | 一层派发，不设组长层 | 两层多一跳转述、成本翻倍，且文件归属更难说清；pi-subagents 的嵌套默认深度为 2 且规则写明「普通子代理不是编排器」 | `pi-subagents/docs/configuration.md:480`；oh-my-opencode-slim 也是严格两层（`src/agents/role-routing.ts`） |
 | 自建轻量插件，不复用 `@saifymatteo/pi-orchestrator` | 它自建 `pi --mode rpc` 派发通道并强制保留 `delegate`，与「复用 pi-subagents 的角色与模型路由」冲突；MIT，仅借鉴其三层结构 | npm registry + 其 README（2026-10-14） |
 | 进入规则 E2（按宿主预设） | 单靠标记会把 `full`/`default` 预设也收敛掉，违反「其它预设不变」 | `pi-web-gui/lib/rpc-manager.ts:267-285` 的 `carriedToolNames` |
-| 编排器不给 bash | `npm test` 类命令经项目脚本可写文件，命令字符串白名单给不出只读保证；验证改由独立角色执行 | 质询复核 omp 的 `plan-mode-guard` 与 `npm test` 执行链 |
+| 编排器默认不给 bash，要开就给个开关 | 命令字符串白名单给不出只读保证（项目脚本可写）；默认名单只放「看」不放进「跑」，保证默认状态下仍是硬保证 | 质询复核 omp 的 `plan-mode-guard` 与 `npm test` 执行链；pi 自带 plan-mode 示例（`examples/extensions/plan-mode/utils.ts` 的 `isSafeCommand`）同一思路 |
+| 只读 bash 是启发式，不是安全保证 | 被放行的命令及其调起的项目脚本仍可写文件；要更强隔离需容器（`examples/extensions/sandbox`） | 实测：`git log --oneline -2` 放行、`git push origin main` 被拦、`npm test` 不在默认名单 |
 | 新增 `agents/verifier.md` | 现成 `evidence-auditor` 只查网页、不能跑命令，映射它等于假验证 | `pi-subagents/agents/evidence-auditor.md` 的 tools |
 | 子代理用能力天花板而非改全局配置 | `disabledFeatures`、`maxSubagentDepth` 都是全局的，会改变非编排会话 | `pi-subagents/docs/configuration.md`；`src/runs/shared/capability-ceiling.js` 的 globalThis 注册表 |
 | 隐藏自己的声明，不隐藏加载器 | 隐藏加载器会破坏普通会话（无 eager 配置时 `subagent` 靠它启用） | `pi-subagents/src/extension/tool-activation.js` |
