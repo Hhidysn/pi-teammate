@@ -19,7 +19,7 @@
 
 ### 进入规则（E2）
 
-`shouldEngage`：显式 `on` 直接进入；`off` 不进入；`auto`（默认）要求「标记活跃」且「当前没有 `writeCapableTools` 里的工具活跃」。后半句是尊重宿主预设——用户在 GUI 选 `full`/`default` 就是想要普通会话，选 `configured`/`read-only` 才是编排器模式。
+`shouldEngage`：显式 `on` 直接进入；`off` 不进入；`auto`（默认）要求「标记活跃」且「当前没有 `entryBlockingTools`（默认 `edit`/`write`）里的工具活跃」。后半句是尊重宿主预设——用户在 GUI 选 `full`/`default` 就是想要普通会话，选 `configured`/`read-only` 才是编排器模式。shell 工具不在默认名单里：pi-web 会给新会话带一个 shell（实测：settings.json 未被改写、来源未定位），而模式一旦进入就用白名单把它收敛掉。
 
 ### 模式内的工具（白名单）
 

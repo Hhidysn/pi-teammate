@@ -8,7 +8,7 @@ test("默认白名单与写工具判定", () => {
 	assert.ok(config.keepTools.includes("subagent"));
 	assert.ok(!config.keepTools.includes("bash"));
 	assert.ok(!config.keepTools.includes("edit"));
-	assert.deepEqual(config.writeCapableTools, ["bash", "powershell", "edit", "write"]);
+	assert.deepEqual(config.entryBlockingTools, ["edit", "write"]);
 	assert.equal(config.allowNamedWorkflows, false);
 });
 

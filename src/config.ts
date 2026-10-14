@@ -30,8 +30,15 @@ export const DEFAULT_KEEP_TOOLS = [
 	SUPERVISOR_TOOL,
 ];
 
-/** 这些工具一旦活跃，就说明用户明确要的是普通会话（E2 进入规则）。 */
-export const DEFAULT_WRITE_CAPABLE_TOOLS = ["bash", "powershell", "edit", "write"];
+/**
+ * 这些工具一旦活跃，说明用户要的是普通会话（E2 进入规则）。
+ * 默认只看写文件的工具：shell（bash/powershell）不算——宿主会自己往新会话里塞一个 shell
+ * （pi-web 实测如此，settings.json 未被改写），而模式一旦进入就会用白名单把它收敛掉。
+ */
+export const DEFAULT_ENTRY_BLOCKING_TOOLS = ["edit", "write"];
+
+/** 「会写东西」的工具，用于提示白名单里含写工具的情况。 */
+export const WRITE_CAPABLE_TOOLS = ["edit", "write", "bash", "powershell"];
 
 /** 角色 → 子代理名。默认映射复用已有 agent 定义，只在配置文件里覆盖。 */
 export const DEFAULT_ROLES: Readonly<Record<string, string>> = {
@@ -86,8 +93,8 @@ export const DEFAULT_HELPERS: readonly string[] = [];
 export interface TeammateConfig {
 	/** 模式内保留的工具名（与门禁同源）。 */
 	keepTools: string[];
-	/** 视为「用户要普通会话」的工具名。 */
-	writeCapableTools: string[];
+	/** 这些工具活跃时不自动进入模式（默认 edit/write）。 */
+	entryBlockingTools: string[];
 	/** 角色 → 子代理名。 */
 	roles: Record<string, string>;
 	/** 额外可派的协助者：不进五步流程，但许派（例如 council-gpt / council-deepseek）。 */
@@ -116,7 +123,7 @@ export function expandHome(path: string): string {
 export function defaultConfig(): TeammateConfig {
 	return {
 		keepTools: [...DEFAULT_KEEP_TOOLS],
-		writeCapableTools: [...DEFAULT_WRITE_CAPABLE_TOOLS],
+		entryBlockingTools: [...DEFAULT_ENTRY_BLOCKING_TOOLS],
 		roles: { ...DEFAULT_ROLES },
 		helpers: [...DEFAULT_HELPERS],
 		referencesDir: DEFAULT_REFERENCES_DIR,
@@ -198,8 +205,8 @@ export function mergeConfig(
 
 	const keepTools = readStringArray(raw, "keepTools", where, warnings);
 	if (keepTools) next.keepTools = keepTools;
-	const writeCapable = readStringArray(raw, "writeCapableTools", where, warnings);
-	if (writeCapable) next.writeCapableTools = writeCapable;
+	const entryBlocking = readStringArray(raw, "entryBlockingTools", where, warnings);
+	if (entryBlocking) next.entryBlockingTools = entryBlocking;
 	const roles = readStringRecord(raw, "roles", where, warnings);
 	if (roles) next.roles = { ...base.roles, ...roles };
 	const helpers = readStringArray(raw, "helpers", where, warnings, { allowEmpty: true });
@@ -216,7 +223,7 @@ export function mergeConfig(
 
 	const known = new Set([
 		"keepTools",
-		"writeCapableTools",
+		"entryBlockingTools",
 		"roles",
 		"helpers",
 		"blockedSubagentActions",

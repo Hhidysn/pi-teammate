@@ -17,6 +17,7 @@ import {
 	ORCHESTRATOR_TOOL,
 	POLICY_SECTION,
 	SUBAGENT_TOOL,
+	WRITE_CAPABLE_TOOLS,
 	loadConfig,
 	type TeammateConfig,
 } from "./config.ts";
@@ -147,9 +148,9 @@ export default function piTeammateExtension(pi: ExtensionAPI): void {
 			ctx.ui.notify("pi-teammate：没有发现 subagent 工具（pi-subagents 未安装或未加载），编排器模式不开启。", "warning");
 			return false;
 		}
-		if (cfg.keepTools.some((name) => cfg.writeCapableTools.includes(name))) {
+		if (cfg.keepTools.some((name) => WRITE_CAPABLE_TOOLS.includes(name))) {
 			ctx.ui.notify(
-				`pi-teammate：白名单里含写工具（${cfg.keepTools.filter((n) => cfg.writeCapableTools.includes(n)).join("、")}），等于放弃「编排器不写代码」的保证。`,
+				`pi-teammate：白名单里含写工具（${cfg.keepTools.filter((n) => WRITE_CAPABLE_TOOLS.includes(n)).join("、")}），等于放弃「编排器不写代码」的保证。`,
 				"warning",
 			);
 		}
@@ -186,7 +187,7 @@ export default function piTeammateExtension(pi: ExtensionAPI): void {
 			markerActive: pi.getActiveTools().includes(ORCHESTRATOR_TOOL),
 			activeTools: pi.getActiveTools(),
 			keepTools: keepList(cfg),
-			writeCapableTools: cfg.writeCapableTools,
+			entryBlockingTools: cfg.entryBlockingTools,
 		});
 	}
 
@@ -260,7 +261,7 @@ export default function piTeammateExtension(pi: ExtensionAPI): void {
 					state: state.mode,
 					markerActive: active.includes(ORCHESTRATOR_TOOL),
 					activeTools: active,
-					writeCapableTools: ensureConfig(ctx).writeCapableTools,
+					entryBlockingTools: ensureConfig(ctx).entryBlockingTools,
 				})
 			) {
 				return;
@@ -279,7 +280,7 @@ export default function piTeammateExtension(pi: ExtensionAPI): void {
 					state: state.mode,
 					markerActive: active.includes(ORCHESTRATOR_TOOL),
 					activeTools: active,
-					writeCapableTools: cfg.writeCapableTools,
+					entryBlockingTools: cfg.entryBlockingTools,
 				});
 				if (!engageNow) return;
 				if (!(await engage(ctx, state, true))) return;

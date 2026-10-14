@@ -53,7 +53,7 @@ pi --tools read,grep,find,ls,subagent,bg_wait,web_search,fetch_content,source_ch
 ```json
 {
   "keepTools": ["read", "grep", "find", "ls", "web_search", "fetch_content", "source_check", "subagent", "bg_wait"],
-  "writeCapableTools": ["bash", "powershell", "edit", "write"],
+  "entryBlockingTools": ["edit", "write"],
   "roles": { "design": "architect", "implement": "worker", "research": "researcher", "recon": "scout", "review": "reviewer", "verify": "verifier" },
   "helpers": ["council-gpt", "council-deepseek"],
   "referencesDir": "~/.agents/skills/i-wish/references",
@@ -65,7 +65,7 @@ pi --tools read,grep,find,ls,subagent,bg_wait,web_search,fetch_content,source_ch
 | 字段 | 作用 |
 | --- | --- |
 | `keepTools` | 模式内保留的工具，改这一个字段就等于改白名单**和**门禁（同源）。加进写工具会失去「不写代码」的保证，启动时会提示。 |
-| `writeCapableTools` | 视为「用户要普通会话」的工具：它们活跃时不自动进入模式（尊重 GUI 预设）。 |
+| `entryBlockingTools` | 这些工具活跃时不自动进入模式（默认 `edit`/`write`）。宿主会往新会话里塞 shell（pi-web 实测如此），所以 shell 不在默认名单里：模式一旦进入就用白名单把它收敛掉。 |
 | `roles` | 角色 → 子代理名。默认复用已有 agent 定义；`verify` 需要能跑命令的角色。 |
 | `helpers` | 额外可派的协助者（不进五步流程），会进子代理允许名单和 policy 文本。例如 `["council-gpt", "council-deepseek"]`。 |
 | `referencesDir` | i-wish 参考目录；存在时注入「设计与拆分读 plan.md、验证读 build.md」的指引。 |

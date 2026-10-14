@@ -7,9 +7,8 @@ export interface EngageInput {
 	state: ModeState;
 	markerActive: boolean;
 	activeTools: readonly string[];
-	writeCapableTools: readonly string[];
+	entryBlockingTools: readonly string[];
 }
-
 /**
  * E2 进入规则：显式 on 直接进；off 不进；auto 要求「标记活跃」且「当前没有写工具」。
  * 后半句是尊重宿主预设：用户在 GUI 里选 full/default（带 bash/edit/write）就是想要普通会话。
@@ -18,7 +17,7 @@ export function shouldEngage(input: EngageInput): boolean {
 	if (input.state === "on") return true;
 	if (input.state === "off") return false;
 	if (!input.markerActive) return false;
-	return !input.activeTools.some((name) => input.writeCapableTools.includes(name));
+	return !input.activeTools.some((name) => input.entryBlockingTools.includes(name));
 }
 
 /** 模式内实际保留的工具：白名单 ∩ 已注册，保持白名单顺序；加载器追加在末尾避免抖动。 */
@@ -70,7 +69,7 @@ export function modeStatusText(input: {
 	markerActive: boolean;
 	activeTools: readonly string[];
 	keepTools: readonly string[];
-	writeCapableTools: readonly string[];
+	entryBlockingTools: readonly string[];
 }): string {
 	const switchHint = "/orchestrator on 可显式开启，off 关闭。";
 	if (input.engaged) {
@@ -81,8 +80,8 @@ export function modeStatusText(input: {
 	if (input.mode === "off") why = "本次会话被 /orchestrator off 关掉了";
 	else if (!input.markerActive) why = "标记未激活（defaultTools 里没有 +orchestrator）";
 	else {
-		const blocking = input.writeCapableTools.filter((name) => input.activeTools.includes(name));
-		why = blocking.length > 0 ? `写工具还活跃（${blocking.join("、")}）：请在 GUI 预设里选 configured/read-only` : "启动失败，见本条之前的提示";
+		const blocking = input.entryBlockingTools.filter((name) => input.activeTools.includes(name));
+		why = blocking.length > 0 ? `写文件的工具还活跃（${blocking.join("、")}）：请在 GUI 预设里选 configured/read-only` : "启动失败，见本条之前的提示";
 	}
 	return `编排器模式：关闭（${input.mode}）｜原因：${why}｜${switchHint}`;
 }

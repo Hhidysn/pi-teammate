@@ -10,26 +10,31 @@ import {
 	toolBlockReason,
 } from "../src/gate.ts";
 
-const WRITE = ["bash", "powershell", "edit", "write"];
+const WRITE = ["edit", "write"];
 const READONLY = ["read", "grep", "find", "ls"];
 const ORCH = "orchestrator";
 
-test("E2：auto 只在「标记活跃且没有写工具」时进入", () => {
+test("E2：auto 只在「标记活跃且没有文件写工具」时进入", () => {
 	assert.equal(
-		shouldEngage({ state: "auto", markerActive: true, activeTools: [ORCH, ...READONLY], writeCapableTools: WRITE }),
+		shouldEngage({ state: "auto", markerActive: true, activeTools: [ORCH, ...READONLY], entryBlockingTools: WRITE }),
 		true,
 	);
 	assert.equal(
-		shouldEngage({ state: "auto", markerActive: true, activeTools: [ORCH, ...READONLY, "bash"], writeCapableTools: WRITE }),
-		false,
-		"GUI 选了 full/default（有写工具）时不进入，尊重用户的预设",
+		shouldEngage({ state: "auto", markerActive: true, activeTools: [ORCH, ...READONLY, "bash"], entryBlockingTools: WRITE }),
+		true,
+		"宿主塞进来的 shell 单独活跃时不拦进入，模式会把它收敛掉",
 	);
-	assert.equal(shouldEngage({ state: "auto", markerActive: false, activeTools: [...READONLY], writeCapableTools: WRITE }), false);
+	assert.equal(
+		shouldEngage({ state: "auto", markerActive: true, activeTools: [ORCH, ...READONLY, "bash", "edit"], entryBlockingTools: WRITE }),
+		false,
+		"GUI 选了 full/default（带 edit/write）时不进入，尊重用户的预设",
+	);
+	assert.equal(shouldEngage({ state: "auto", markerActive: false, activeTools: [...READONLY], entryBlockingTools: WRITE }), false);
 });
 
 test("on/off 覆盖 auto", () => {
-	assert.equal(shouldEngage({ state: "on", markerActive: false, activeTools: ["bash"], writeCapableTools: WRITE }), true);
-	assert.equal(shouldEngage({ state: "off", markerActive: true, activeTools: [...READONLY], writeCapableTools: WRITE }), false);
+	assert.equal(shouldEngage({ state: "on", markerActive: false, activeTools: ["bash"], entryBlockingTools: WRITE }), true);
+	assert.equal(shouldEngage({ state: "off", markerActive: true, activeTools: [...READONLY], entryBlockingTools: WRITE }), false);
 });
 
 test("白名单取交集、保持顺序，并追加加载器避免与 pi-subagents 抢声明", () => {
@@ -62,12 +67,12 @@ test("状态文案：开启时列工具，关闭时给得出原因", () => {
 	const base = {
 		mode: "auto" as const,
 		keepTools: ["orchestrator", "read", "subagent"],
-		writeCapableTools: ["bash", "edit", "write"],
+		entryBlockingTools: ["edit", "write"],
 	};
 	const on = modeStatusText({ ...base, engaged: true, markerActive: true, activeTools: base.keepTools });
 	assert.ok(on.includes("工具(2)：read、subagent"), on);
-	const blocked = modeStatusText({ ...base, engaged: false, markerActive: true, activeTools: ["read", "bash", "write"] });
-	assert.ok(blocked.includes("写工具还活跃（bash、write）"), blocked);
+	const blocked = modeStatusText({ ...base, engaged: false, markerActive: true, activeTools: ["read", "edit", "write"] });
+	assert.ok(blocked.includes("写文件的工具还活跃（edit、write）"), blocked);
 	const noMarker = modeStatusText({ ...base, engaged: false, markerActive: false, activeTools: ["read"] });
 	assert.ok(noMarker.includes("标记未激活"), noMarker);
 	const turnedOff = modeStatusText({ ...base, mode: "off", engaged: false, markerActive: true, activeTools: ["read"] });
