@@ -191,6 +191,33 @@ export default function piTeammateExtension(pi: ExtensionAPI): void {
 		});
 	}
 
+	/** 按当前分支重建状态：分支里最后一条 pi-teammate:mode 决定模式，没有条目就是 auto。 */
+	function rebuildFromBranch(ctx: ExtensionContext, state: SessionMode): { persistedMode?: ModeState } {
+		const persisted = readPersistedMode(ctx);
+		state.mode = persisted.mode ?? "auto";
+		state.previousTools = persisted.previousTools ?? [];
+		state.engaged = false;
+		state.policy = undefined;
+		state.ceiling?.dispose();
+		state.ceiling = undefined;
+		return { persistedMode: persisted.mode };
+	}
+
+	async function engageIfWanted(ctx: ExtensionContext, state: SessionMode, persist: boolean): Promise<void> {
+		if (state.mode === "off") return;
+		const cfg = ensureConfig(ctx);
+		const active = pi.getActiveTools();
+		if (!shouldEngage({
+			state: state.mode,
+			markerActive: active.includes(ORCHESTRATOR_TOOL),
+			activeTools: active,
+			entryBlockingTools: cfg.entryBlockingTools,
+		})) {
+			return;
+		}
+		await engage(ctx, state, persist);
+	}
+
 	/** 处理异常不能让模式静默失败：报一次，带上原始信息。 */
 	const reported = new Set<string>();
 	async function guarded(label: string, ctx: ExtensionContext, run: () => Promise<void>): Promise<void> {
@@ -250,23 +277,18 @@ export default function piTeammateExtension(pi: ExtensionAPI): void {
 		await guarded("session_start", ctx, async () => {
 			ensureConfig(ctx);
 			const state = stateOf(ctx);
-			const persisted = readPersistedMode(ctx);
-			state.mode = persisted.mode ?? "auto";
-			state.engaged = false;
-			state.previousTools = [];
-			if (state.mode === "off") return;
-			const active = pi.getActiveTools();
-			if (
-				!shouldEngage({
-					state: state.mode,
-					markerActive: active.includes(ORCHESTRATOR_TOOL),
-					activeTools: active,
-					entryBlockingTools: ensureConfig(ctx).entryBlockingTools,
-				})
-			) {
-				return;
-			}
-			await engage(ctx, state, true);
+			const { persistedMode } = rebuildFromBranch(ctx, state);
+			await engageIfWanted(ctx, state, persistedMode === undefined);
+		});
+	});
+
+	// 树导航不发 session_start（pi 只发 session_tree），必须在这里按新分支重建；
+	// 否则上一分支的 engaged 标志会泄漏到「开启之前」的分支上。
+	pi.on("session_tree", async (_event, ctx) => {
+		await guarded("session_tree", ctx, async () => {
+			const state = stateOf(ctx);
+			const { persistedMode } = rebuildFromBranch(ctx, state);
+			await engageIfWanted(ctx, state, persistedMode === undefined);
 		});
 	});
 

@@ -85,6 +85,36 @@ A1–A5 在 G1 阶段由独立验证者跑确定性检查；A6 在 G2 阶段跑�
 
 G2 未覆盖：GUI 预设矩阵与 `/reload`、树导航后的状态（需要交互式 TUI 与 GUI 手测）；带 `subagent` 工具的自定义角色档案下的「孙代理」行为检查（机制上由天花板剔除 `subagent` 阻断，G1 已验工具集剔除与注册内容）。
 
+### 第二轮独立验证（2026-10-14，独立验证者 / verifier 新上下文）
+
+冻结版本 `dc808fa`（工作区干净）；原始输出 `/tmp/pt-v2/out/`。
+
+**已验证**
+
+- **V1 进入条件回归**：标记活跃 + 只有 `bash` 活跃、无 `edit`/`write` → 进入，且请求面 `sections.tools` 无 `bash`（`getActiveTools()` 在 session_start 含 bash、before_agent_start 已收敛）。settings 配方（`{"+orchestrator","+bash","-edit","-write"}`）同样进入：`编排器模式：开启（auto）｜工具(10)：…`。
+- **V2** 标记 + `edit` 或 `write` 活跃 → 不进入（分支无模式条目、请求面无 `pi_teammate`）。
+- **V3 状态文案**：所有 notify 均单行；未进入的四种情形（标记未激活 / edit / write / edit+write / 被 off 关掉）原因与实际阻碍逐条一致。
+- **V4 `/reload`**（用扩展命令调 `ctx.reload()`，同一 `session.reload()` 路径）：reload 后模式仍在、活跃集精确等于白名单、状态条目仍在分支、天花板重新注册。
+- **V5 GUI 预设矩阵的 CLI 等价复核**：无写工具方向 → 进入；`edit`/`write` 方向 → 不进入。真实 GUI 矩阵由用户手工确认：`configured`/`read-only` 开、`default`/`full` 关、`chat-only` 不涉及扩展。
+- **V6** 单测 `node --test`：12/12。
+
+**失败并已修复（F1）**
+
+- 现象：树导航到「开启模式之前」的分支（该分支无 `pi-teammate:mode` 条目）后，模式仍然生效：下一轮请求面含 `pi_teammate` 且工具被钉成白名单；期望是回到普通会话。
+- 根因：`src/index.ts` 只在 `session_start`/`before_agent_start`/`tool_call` 上重建状态，没有 `session_tree` 处理器；而 pi 的 `navigateTree()` 只发 `session_tree` 不发 `session_start`，于是运行期的 `engaged` 标志跨分支沿用。
+- 修复：新增 `session_tree` 处理器，与 `session_start` 共用 `rebuildFromBranch()`（按新分支最后一条模式条目重建 mode 与 previousTools，并 dispose 旧天花板），再走 `engageIfWanted()`；分支里已有条目时不再重复追加。
+- 复现确认（用验证者的脚本，主代理执行，非独立）：`post-nav` 到无条目分支 → `ACTIVE=[read,bash,edit,write,…]`、天花板 `empty`、下一轮 `SECTIONS=[]`；导航回带 `mode:"on"` 的分支 → 重新收敛 + 天花板重新注册。
+
+**非缺陷（裁量）**
+
+- 状态文案在「已开启」时不含 `｜原因：`：那是第二轮任务书的措辞，契约（README / 本文件）只要求未进入时给出原因，故不视为缺陷。
+
+**本轮未覆盖**
+
+- 真实 GUI 进程里的预设取值（`carriedToolNames`）与 `chat-only`：未独立验证（用户手工确认预设矩阵，CLI 等价配方已验）。
+- TUI 按键路径（`/reload` 键位、`/tree` 选择器 UI）：用 `ctx.reload()` / `ctx.navigateTree()` 等价路径替代，键位与渲染未覆盖。
+- F1 修复的独立复核：上一条复现确认由主代理执行，若要完全独立，需再派一次验证。
+
 ## 决策与来源
 
 | 决定 | 备选与否决理由 | 依据 |
