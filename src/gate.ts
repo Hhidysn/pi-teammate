@@ -49,13 +49,20 @@ export function toolBlockReason(
 }
 
 export const NAMED_WORKFLOW_REASON =
-	"命名 workflow 会让宿主直接执行命令（如 run-ci 的 npm test），编排器模式下已禁用。要跑测试或 CI 请派 verify 角色，由它执行并交回命令、退出码与原始输出位置。";
+	"命名 workflow 会让宿主直接执行命令（如 run-ci 的 npm test），编排器模式下已禁用。并行派活请用 tasks、顺序派活用 chain；要跑命令请让 verify 角色去跑并交回命令、退出码与输出位置。";
+
+/** 文件路径形式的 workflow 脚本（例如 "./flow.js"）没有宿主命令权限，放行；命名资源（如 run-ci）拦下。 */
+export function isScriptPath(value: string): boolean {
+	return /[\\/]/.test(value) || /\.(js|mjs|cjs|ts|mts)$/i.test(value);
+}
 
 /** subagent 的参数级准入：拦命名 workflow 与配置写入类 action，放行派活、查询、等待、续跑。 */
 export function subagentBlockReason(input: unknown, config: TeammateConfig): string | undefined {
 	if (typeof input !== "object" || input === null) return undefined;
 	const record = input as Record<string, unknown>;
-	if (typeof record.workflow === "string" && !config.allowNamedWorkflows) return NAMED_WORKFLOW_REASON;
+	if (typeof record.workflow === "string" && !config.allowNamedWorkflows && !isScriptPath(record.workflow)) {
+		return NAMED_WORKFLOW_REASON;
+	}
 	if (typeof record.action === "string" && config.blockedSubagentActions.includes(record.action)) {
 		return `subagent 的 ${record.action} 会写宿主配置或计划表，不属于派活范围，编排器模式下已禁用。`;
 	}

@@ -55,6 +55,8 @@ test("白名单外的工具被拦下，并给出该派给谁", () => {
 test("subagent：拦命名 workflow 与配置写入 action，放行派活与内联脚本", () => {
 	const config = defaultConfig();
 	assert.ok(subagentBlockReason({ workflow: "run-ci", args: { command: "npm test" } }, config)?.includes("命名 workflow"));
+	assert.equal(subagentBlockReason({ workflow: "./scripts/flow.js" }, config), undefined, "路径脚本没有宿主命令权限，放行");
+	assert.equal(subagentBlockReason({ workflow: "scripts\flow.js" }, config), undefined, "Windows 风格路径同样放行");
 	assert.ok(subagentBlockReason({ action: "config.update" }, config) === undefined);
 	assert.ok(subagentBlockReason({ action: "update" }, config)?.includes("update"));
 	assert.equal(subagentBlockReason({ agent: "worker", task: "改这个" }, config), undefined);

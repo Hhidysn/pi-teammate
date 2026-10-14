@@ -80,7 +80,8 @@ pi --tools read,grep,find,ls,subagent,bg_wait,web_search,fetch_content,source_ch
 
 ## 已知边界
 
-- **编排器不能自己跑命令**，所以全量测试、`git diff` 核对由 `verify` 角色执行；编排器读它交回的结论与输出位置。
+- **编排器不能自己跑命令**，所以全量测试、`git diff` 核对由 `verify` 角色执行；编排器读它交回的结论与输出位置。需要看代码分布时派 `scout`。
+- **派发形态**：优先 `subagent({agent, task})`、`tasks: [...]`（并行）、`chain: [...]`（顺序）；内联 workflow（`workflow: true` + 回复正文里的 js 块）在真实会话里失败过，不建议；命名 workflow（`run-ci` 等）会执行宿主命令、已被拦；文件路径脚本（`workflow: "./flow.js"`）没有宿主命令权限，放行。
 - **不能写文件**：设计文档、任务记录这类产物由 `worker` 落地，编排器审内容。
 - 能力天花板依赖 pi-subagents 的公共接口（`src/api/capability-ceiling.js`，按 globalThis 注册表共享）。找不到时会警告，此时用角色档案的 `maxSubagentDepth: 1` 兜底。
 - 旧的 pi（< 0.86.1）缺少 `getActiveTools`/`setActiveTools` 时不做工具收敛，模式不生效。

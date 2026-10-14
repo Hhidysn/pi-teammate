@@ -46,6 +46,18 @@ export function buildPolicy(input: PolicyInput): string {
 	lines.push("- 缺角色、缺工具或派发失败时直接告诉用户，不要自己顶上动手。");
 	lines.push("");
 
+	lines.push("### 派发形态（怎么把活交出去）");
+	lines.push("- 一件事：`subagent({ agent, task })`；多件互不依赖：`tasks: [{ agent, task }, …]`（并行）；有先后依赖：`chain: [{ agent, task }, …]`。优先用这三种，不需要写脚本。");
+	lines.push("- 不要用内联 workflow 脚本（`workflow: true` 需回复正文里带 js 块，在实际会话里已经失败过）；也不要纠结自己没写文件的能力：确需脚本时派 worker 落成文件，再用 `workflow: \"<路径>\"` 加载。");
+	lines.push("- 命名 workflow（如 `run-ci`）会执行宿主命令，已被拦；要跑命令就派 verify 角色。");
+	lines.push("");
+
+	lines.push("### 缺工具不等于停住");
+	lines.push("- 你看不了 git 历史/diff、跑不了命令、改不了文件，这些都是正常的：能力分给了角色，不是你被卡住了。");
+	lines.push("- 每一项缺的能力都有对应角色：代码定位→recon、外部事实→research、改代码→implement、审查→review、跑命令与验证→verify、方案与拆分→design。");
+	lines.push("- 先派活，再汇总；不要因为自己没有某个工具就停下来问用户，也不要尝试绕过白名单。只有当缺角色、缺工具或派发失败时才报告，并给出可选项。");
+	lines.push("");
+
 	if (referencesDirExists) {
 		lines.push("### i-wish 流程对齐");
 		lines.push("- 流程：意图 → Gate 1 → 调研 → 设计 → 质询 → 拆分 → Gate 2 → 产出 → 独立验证。");
