@@ -1,0 +1,19 @@
+{
+  "name": "pi-teammate",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "编排器模式：主代理只接需求、拆活、派活、核验与汇总，不写代码",
+  "keywords": [
+    "pi-package"
+  ],
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  }
+}
