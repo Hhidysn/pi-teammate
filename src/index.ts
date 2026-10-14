@@ -162,7 +162,7 @@ export default function piTeammateExtension(pi: ExtensionAPI): void {
 		await registerCeiling(ctx, state, cfg);
 		if (persist) pi.appendEntry(MODE_ENTRY, { mode: state.mode, previousTools: state.previousTools });
 		const usable = keep.filter((name) => name !== ORCHESTRATOR_TOOL);
-		ctx.ui.notify(`编排器模式已开启（${usable.length} 个工具）：${usable.join("、")}`);
+		ctx.ui.notify(`编排器模式已开启｜工具(${usable.length})：${usable.join("、")}`);
 		return true;
 	}
 

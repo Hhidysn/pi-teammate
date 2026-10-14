@@ -65,9 +65,9 @@ test("状态文案：开启时列工具，关闭时给得出原因", () => {
 		writeCapableTools: ["bash", "edit", "write"],
 	};
 	const on = modeStatusText({ ...base, engaged: true, markerActive: true, activeTools: base.keepTools });
-	assert.ok(on.includes("工具（2）：read、subagent"), on);
+	assert.ok(on.includes("工具(2)：read、subagent"), on);
 	const blocked = modeStatusText({ ...base, engaged: false, markerActive: true, activeTools: ["read", "bash", "write"] });
-	assert.ok(blocked.includes("这些写工具还活跃：bash、write"), blocked);
+	assert.ok(blocked.includes("写工具还活跃（bash、write）"), blocked);
 	const noMarker = modeStatusText({ ...base, engaged: false, markerActive: false, activeTools: ["read"] });
 	assert.ok(noMarker.includes("标记未激活"), noMarker);
 	const turnedOff = modeStatusText({ ...base, mode: "off", engaged: false, markerActive: true, activeTools: ["read"] });

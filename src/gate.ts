@@ -72,23 +72,19 @@ export function modeStatusText(input: {
 	keepTools: readonly string[];
 	writeCapableTools: readonly string[];
 }): string {
-	const switchHint = "开关：/orchestrator on|off。";
+	const switchHint = "/orchestrator on 可显式开启，off 关闭。";
 	if (input.engaged) {
 		const usable = input.keepTools.filter((name) => name !== ORCHESTRATOR_TOOL);
-		return `编排器模式：开启（模式=${input.mode}）。${switchHint}\n工具（${usable.length}）：${usable.join("、")}`;
+		return `编排器模式：开启（${input.mode}）｜工具(${usable.length})：${usable.join("、")}`;
 	}
 	let why: string;
 	if (input.mode === "off") why = "本次会话被 /orchestrator off 关掉了";
-	else if (!input.markerActive) {
-		why = "标记未激活：settings.json 的 defaultTools 里没有 +orchestrator，或宿主预设把它剔掉了";
-	} else {
+	else if (!input.markerActive) why = "标记未激活（defaultTools 里没有 +orchestrator）";
+	else {
 		const blocking = input.writeCapableTools.filter((name) => input.activeTools.includes(name));
-		why =
-			blocking.length > 0
-				? `这些写工具还活跃：${blocking.join("、")}（想用编排器模式就在 GUI 里选 configured/read-only，或执行 /orchestrator on）`
-				: "启动时没能开启，见会话开头 pi-teammate 的提示";
+		why = blocking.length > 0 ? `写工具还活跃（${blocking.join("、")}）：请在 GUI 预设里选 configured/read-only` : "启动失败，见本条之前的提示";
 	}
-	return `编排器模式：关闭（模式=${input.mode}）。${switchHint}\n原因：${why}`;
+	return `编排器模式：关闭（${input.mode}）｜原因：${why}｜${switchHint}`;
 }
 
 /** 子代理不允许再派发：能力天花板里剔掉这些名字。 */
