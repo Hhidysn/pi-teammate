@@ -131,6 +131,41 @@ export function expandHome(path: string): string {
 	return path;
 }
 
+/** pi-subagents 除 agent 目录以外的配置路径片段。 */
+const SUBAGENT_CONFIG_RELATIVE = ["extensions", "subagent", "config.json"] as const;
+
+/** 默认 agent 目录（host `getAgentDir` 的默认值）；调用方可传入真实值。 */
+export function defaultAgentDir(): string {
+	return join(homedir(), ".pi", "agent");
+}
+
+/** 读一份 pi-subagents 配置的 `disabledFeatures`；文件缺失/非对象/字段非数组都返回 undefined。 */
+function readDisabledFeatures(path: string): string[] | undefined {
+	if (!existsSync(path)) return undefined;
+	try {
+		const parsed = JSON.parse(readFileSync(path, "utf8")) as unknown;
+		if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return undefined;
+		const value = (parsed as Record<string, unknown>).disabledFeatures;
+		if (!Array.isArray(value)) return undefined;
+		return value.filter((item): item is string => typeof item === "string");
+	} catch {
+		return undefined;
+	}
+}
+
+/**
+ * pi-subagents 的 `workflow-scripts` 特性是否被禁用。
+ * 它只在禁用 `workflow-scripts` 时才接受顶层 `tasks`/`chain`（见 pi-subagents
+ * `public-execution.js` 的 `structuredWorkflows`）；未禁用时只接受 workflow 脚本。
+ * 读用户级 `<agentDir>/extensions/subagent/config.json`；项目级 `<cwd>/.pi/extensions/subagent/config.json`
+ * 定义了 `disabledFeatures` 时覆盖用户级。
+ */
+export function readWorkflowScriptsDisabled(agentDir: string, cwd: string): boolean {
+	const project = readDisabledFeatures(join(cwd, ".pi", ...SUBAGENT_CONFIG_RELATIVE));
+	const user = readDisabledFeatures(join(agentDir, ...SUBAGENT_CONFIG_RELATIVE));
+	return (project ?? user)?.includes("workflow-scripts") ?? false;
+}
+
 export function defaultConfig(): TeammateConfig {
 	return {
 		keepTools: [...DEFAULT_KEEP_TOOLS],

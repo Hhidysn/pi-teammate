@@ -95,7 +95,10 @@ pi --tools read,grep,find,ls,subagent,bg_wait,web_search,fetch_content,source_ch
 
 - **编排器只有只读的「看」能力**：默认没有 bash；开了 `bashPolicy: "allowlist"` 也只能看（git 历史/diff、读文件、搜索），**跑不了测试**（`npm test`、`pwsh .../run_godot_tests.ps1` 这类入口不在默认名单里），也改不了文件。全量测试由 `verify` 角色跑并交回命令、cwd、退出码与输出位置；需要看代码分布时派 `scout`。
 - **只读 bash 是启发式，不是安全保证**：被放行的命令可能自己调项目脚本写文件（`npm test` 的 pretest/posttest、构建产物、git 的 textconv/外部 diff）。默认名单只放「看」；要跑测试就用 `bashAllow` 显式加，加的时候就接受了这个风险。
-- **派发形态**：优先 `subagent({agent, task})`、`tasks: [...]`（并行）、`chain: [...]`（顺序）；内联 workflow（`workflow: true` + 回复正文里的 js 块）在真实会话里失败过，不建议；命名 workflow（`run-ci` 等）会执行宿主命令、已被拦；文件路径脚本（`workflow: "./flow.js"`）没有宿主命令权限，放行。
+- **派发形态（按本机 pi-subagents 实际配置）**：先看 `~/.pi/agent/extensions/subagent/config.json`（项目 `.pi/extensions/subagent/config.json` 可覆盖）的 `disabledFeatures` 是否含 `workflow-scripts`。pi-subagents 只在**禁用** `workflow-scripts` 时才接受顶层 `tasks`/`chain`；未禁用时只接受 workflow 脚本。提示词与门禁都按这个开关生成：
+  - **未禁用（默认）**：单发 `subagent({ agent, task })`；并行/多步用 `subagent({ workflow: true })` + **同一条回复**正文里的 ```js 块（形如 `return await runs.all([{ key, agent, task }, …])`），或 `workflow: "<脚本文件路径>"`（脚本让 worker 落地）。js 块必须与调用在同一条回复里，分开写会失败；命名 workflow（`run-ci` 那类）已被门禁拦；上面两种都失败就退回逐个单发（各自异步后台跑）。
+  - **已禁用 `workflow-scripts`**：并行用 `subagent({ tasks: [{ agent, task }, …] })`、顺序用 `subagent({ chain: [{ agent, task }, …] })`；内联脚本与命名资源都不可用。
+  门禁会提前拦下“注定失败”的形态（未禁用时传 `tasks`/`chain`，或已禁用时传 `workflow`），并给出正确形态。
 - **不能写文件**：设计文档、任务记录这类产物由 `worker` 落地，编排器审内容。
 - 能力天花板依赖 pi-subagents 的公共接口（`src/api/capability-ceiling.js`，按 globalThis 注册表共享）。找不到时会警告，此时用角色档案的 `maxSubagentDepth: 1` 兜底。
 - 旧的 pi（< 0.86.1）缺少 `getActiveTools`/`setActiveTools` 时不做工具收敛，模式不生效。

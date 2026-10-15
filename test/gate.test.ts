@@ -56,15 +56,39 @@ test("白名单外的工具被拦下，并给出该派给谁", () => {
 
 test("subagent：拦命名 workflow 与配置写入 action，放行派活与内联脚本", () => {
 	const config = defaultConfig();
-	assert.ok(subagentBlockReason({ workflow: "run-ci", args: { command: "npm test" } }, config)?.includes("命名 workflow"));
-	assert.equal(subagentBlockReason({ workflow: "./scripts/flow.js" }, config), undefined, "路径脚本没有宿主命令权限，放行");
-	assert.equal(subagentBlockReason({ workflow: "scripts\flow.js" }, config), undefined, "Windows 风格路径同样放行");
-	assert.ok(subagentBlockReason({ action: "config.update" }, config) === undefined);
-	assert.ok(subagentBlockReason({ action: "update" }, config)?.includes("update"));
-	assert.equal(subagentBlockReason({ agent: "worker", task: "改这个" }, config), undefined);
-	assert.equal(subagentBlockReason({ workflow: true }, config), undefined, "内联脚本没有宿主命令权限，放行");
-	assert.equal(subagentBlockReason({ tasks: [{ agent: "worker", task: "x" }] }, config), undefined);
-	assert.equal(subagentBlockReason({ action: "list" }, config), undefined);
+	const scriptsOn = { workflowScriptsDisabled: false };
+	assert.ok(subagentBlockReason({ workflow: "run-ci", args: { command: "npm test" } }, config, scriptsOn)?.includes("命名 workflow"));
+	assert.equal(subagentBlockReason({ workflow: "./scripts/flow.js" }, config, scriptsOn), undefined, "路径脚本没有宿主命令权限，放行");
+	assert.equal(subagentBlockReason({ workflow: "scripts\flow.js" }, config, scriptsOn), undefined, "Windows 风格路径同样放行");
+	assert.ok(subagentBlockReason({ action: "config.update" }, config, scriptsOn) === undefined);
+	assert.ok(subagentBlockReason({ action: "update" }, config, scriptsOn)?.includes("update"));
+	assert.equal(subagentBlockReason({ agent: "worker", task: "改这个" }, config, scriptsOn), undefined);
+	assert.equal(subagentBlockReason({ workflow: true }, config, scriptsOn), undefined, "workflow-scripts 可用时内联脚本放行");
+	assert.equal(subagentBlockReason({ action: "list" }, config, scriptsOn), undefined);
+});
+
+test("subagent：按 pi-subagents 的 workflow-scripts 配置拦下注定失败的形态", () => {
+	const config = defaultConfig();
+
+	// 未禁用 workflow-scripts（默认）：顶层 tasks/chain 会被 pi-subagents 拒绝 → 提前拦下并指正确形态
+	const scriptsOn = { workflowScriptsDisabled: false };
+	const tasksReason = subagentBlockReason({ tasks: [{ agent: "worker", task: "x" }] }, config, scriptsOn);
+	assert.ok(tasksReason?.includes("workflow-scripts 未禁用"), tasksReason);
+	assert.ok(tasksReason?.includes("workflow: true"), tasksReason);
+	assert.ok(subagentBlockReason({ chain: [{ agent: "worker", task: "x" }] }, config, scriptsOn)?.includes("未禁用"));
+	assert.equal(subagentBlockReason({ workflow: true }, config, scriptsOn), undefined);
+	assert.equal(subagentBlockReason({ workflow: "./flow.js" }, config, scriptsOn), undefined);
+	assert.ok(subagentBlockReason({ workflow: "run-ci" }, config, scriptsOn)?.includes("命名 workflow"));
+
+	// 已禁用 workflow-scripts：脚本/命名资源不可用 → tasks/chain 才是正确形态
+	const scriptsOff = { workflowScriptsDisabled: true };
+	const wfReason = subagentBlockReason({ workflow: true }, config, scriptsOff);
+	assert.ok(wfReason?.includes("已禁用 workflow-scripts"), wfReason);
+	assert.ok(wfReason?.includes("tasks"), wfReason);
+	assert.ok(subagentBlockReason({ workflow: "./flow.js" }, config, scriptsOff)?.includes("已禁用 workflow-scripts"));
+	assert.ok(subagentBlockReason({ workflow: "run-ci" }, config, scriptsOff)?.includes("已禁用 workflow-scripts"));
+	assert.equal(subagentBlockReason({ tasks: [{ agent: "worker", task: "x" }] }, config, scriptsOff), undefined);
+	assert.equal(subagentBlockReason({ chain: [{ agent: "worker", task: "x" }] }, config, scriptsOff), undefined);
 });
 
 test("状态文案：开启时列工具，关闭时给得出原因", () => {

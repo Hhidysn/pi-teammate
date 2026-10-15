@@ -1,5 +1,12 @@
 /** 门禁与进入规则的纯函数：不引用宿主 API，便于单测。 */
-import { ORCHESTRATOR_TOOL, ROLE_LABELS, SUBAGENT_TOOL, type TeammateConfig } from "./config.ts";
+import {
+	ORCHESTRATOR_TOOL,
+	ROLE_LABELS,
+	SUBAGENT_TOOL,
+	defaultAgentDir,
+	readWorkflowScriptsDisabled,
+	type TeammateConfig,
+} from "./config.ts";
 
 export type ModeState = "auto" | "on" | "off";
 
@@ -49,17 +56,48 @@ export function toolBlockReason(
 }
 
 export const NAMED_WORKFLOW_REASON =
-	"命名 workflow 会让宿主直接执行命令（如 run-ci 的 npm test），编排器模式下已禁用。并行派活请用 tasks、顺序派活用 chain；要跑命令请让 verify 角色去跑并交回命令、退出码与输出位置。";
+	"命名 workflow（如 run-ci）会让宿主直接执行命令，编排器模式下已禁用。并行/多步请用一个 workflow 脚本（`subagent({ workflow: true })` + 同一条回复里的 ```js 块，或 `workflow: \"<脚本文件路径>\"`），或退回逐个单发；要跑命令请派 verify 角色。";
 
 /** 文件路径形式的 workflow 脚本（例如 "./flow.js"）没有宿主命令权限，放行；命名资源（如 run-ci）拦下。 */
 export function isScriptPath(value: string): boolean {
 	return /[\\/]/.test(value) || /\.(js|mjs|cjs|ts|mts)$/i.test(value);
 }
 
+/** subagent 参数级准入的配置层：可注入 workflow-scripts 开关，默认读本机/项目配置。 */
+export interface SubagentBlockOptions {
+	/**
+	 * pi-subagents 的 `workflow-scripts` 是否被禁用。禁用时它接受顶层 `tasks`/`chain`，不接受脚本；
+	 * 未禁用（默认）时相反。默认读 `~/.pi/agent` 与 cwd 下的 pi-subagents 配置。
+	 */
+	workflowScriptsDisabled?: boolean;
+}
+
+const STRUCTURED_INPUT_REJECTED_REASON =
+	"本机 pi-subagents 的 workflow-scripts 未禁用，顶层 tasks/chain 会被拒绝（Legacy top-level chain and parallel inputs were removed）。并行/多步请用 `subagent({ workflow: true })` + 同一条回复里的 ```js 块（形如 `return await runs.all([{ key, agent, task }, …])`），或 `workflow: \"<脚本文件路径>\"`（脚本让 worker 落地）；两种都失败就退回逐个单发。";
+
+const WORKFLOW_SCRIPT_DISABLED_REASON =
+	"本机 pi-subagents 已禁用 workflow-scripts：内联脚本（`workflow: true`）与命名 workflow 资源都不可用。并行用 `subagent({ tasks: [{ agent, task }, …] })`，顺序用 `subagent({ chain: [{ agent, task }, …] })`；要跑命令请派 verify 角色。";
+
 /** subagent 的参数级准入：拦命名 workflow 与配置写入类 action，放行派活、查询、等待、续跑。 */
-export function subagentBlockReason(input: unknown, config: TeammateConfig): string | undefined {
+export function subagentBlockReason(
+	input: unknown,
+	config: TeammateConfig,
+	options?: SubagentBlockOptions,
+): string | undefined {
 	if (typeof input !== "object" || input === null) return undefined;
 	const record = input as Record<string, unknown>;
+	const workflowScriptsDisabled =
+		options?.workflowScriptsDisabled ?? readWorkflowScriptsDisabled(defaultAgentDir(), process.cwd());
+
+	const hasStructuredInput = record.tasks !== undefined || record.chain !== undefined;
+	const hasWorkflowInput = record.workflow !== undefined;
+	// 提前拦下 pi-subagents 注定会拒绝的形态，省掉一轮失败。
+	if (workflowScriptsDisabled) {
+		if (hasWorkflowInput) return WORKFLOW_SCRIPT_DISABLED_REASON;
+	} else if (hasStructuredInput) {
+		return STRUCTURED_INPUT_REJECTED_REASON;
+	}
+
 	if (typeof record.workflow === "string" && !config.allowNamedWorkflows && !isScriptPath(record.workflow)) {
 		return NAMED_WORKFLOW_REASON;
 	}

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
-import { defaultConfig, expandHome, mergeConfig } from "../src/config.ts";
+import { defaultConfig, expandHome, mergeConfig, readWorkflowScriptsDisabled } from "../src/config.ts";
 
 test("默认白名单与写工具判定", () => {
 	const config = defaultConfig();
@@ -48,4 +51,26 @@ test("非法与未知字段都会告警，不静默吞掉", () => {
 test("~ 展开", () => {
 	assert.ok(expandHome("~/.agents/skills").endsWith(".agents/skills") || expandHome("~/.agents/skills").includes("agents"));
 	assert.equal(expandHome("C:/tmp/x"), "C:/tmp/x");
+});
+
+test("读 pi-subagents 的 workflow-scripts 开关（用户级 + 项目级覆盖）", () => {
+	const root = mkdtempSync(join(tmpdir(), "pi-teammate-"));
+	try {
+		const agentDir = join(root, "agent");
+		const cwd = join(root, "proj");
+		const userPath = join(agentDir, "extensions", "subagent", "config.json");
+		const projectPath = join(cwd, ".pi", "extensions", "subagent", "config.json");
+		mkdirSync(join(agentDir, "extensions", "subagent"), { recursive: true });
+		mkdirSync(join(cwd, ".pi", "extensions", "subagent"), { recursive: true });
+
+		assert.equal(readWorkflowScriptsDisabled(agentDir, cwd), false, "无配置时默认未禁用");
+		writeFileSync(userPath, JSON.stringify({ disabledFeatures: ["workflow-scripts"] }));
+		assert.equal(readWorkflowScriptsDisabled(agentDir, cwd), true, "用户级禁用生效");
+		writeFileSync(projectPath, JSON.stringify({ disabledFeatures: ["missions"] }));
+		assert.equal(readWorkflowScriptsDisabled(agentDir, cwd), false, "项目级 disabledFeatures 覆盖用户级");
+		writeFileSync(userPath, "{ not json");
+		assert.equal(readWorkflowScriptsDisabled(agentDir, cwd), false, "坏 JSON 忽略");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
 });

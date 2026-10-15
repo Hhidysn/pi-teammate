@@ -8,10 +8,12 @@ export interface PolicyInput {
 	keepTools: readonly string[];
 	/** i-wish 参考目录是否存在；不存在则不写这一节。 */
 	referencesDirExists: boolean;
+	/** pi-subagents 的 workflow-scripts 是否被禁用；决定并行/多步的派发形态。 */
+	workflowScriptsDisabled: boolean;
 }
 
 export function buildPolicy(input: PolicyInput): string {
-	const { config, keepTools, referencesDirExists } = input;
+	const { config, keepTools, referencesDirExists, workflowScriptsDisabled } = input;
 	const lines: string[] = [];
 
 	lines.push("## 编排器模式（pi-teammate）");
@@ -63,9 +65,17 @@ export function buildPolicy(input: PolicyInput): string {
 	lines.push("");
 
 	lines.push("### 派发形态（怎么把活交出去）");
-	lines.push("- 一件事：`subagent({ agent, task })`；多件互不依赖：`tasks: [{ agent, task }, …]`（并行）；有先后依赖：`chain: [{ agent, task }, …]`。优先用这三种，不需要写脚本。");
-	lines.push("- 不要用内联 workflow 脚本（`workflow: true` 需回复正文里带 js 块，在实际会话里已经失败过）；也不要纠结自己没写文件的能力：确需脚本时派 worker 落成文件，再用 `workflow: \"<路径>\"` 加载。");
-	lines.push("- 命名 workflow（如 `run-ci`）会执行宿主命令，已被拦；要跑命令就派 verify 角色。");
+	lines.push("- 一件事：`subagent({ agent, task })`。");
+	if (workflowScriptsDisabled) {
+		lines.push("- 多件互不依赖：`subagent({ tasks: [{ agent, task }, …] })`（并行）；有先后依赖：`subagent({ chain: [{ agent, task }, …] })`（顺序）。");
+		lines.push("- 本机 pi-subagents 已禁用 workflow-scripts：内联脚本（`workflow: true`）与命名 workflow 资源都不可用（要跑命令就派 verify 角色）。");
+	} else {
+		lines.push("- 多件/多步：本机 pi-subagents 的 workflow-scripts 未禁用，顶层 `tasks`/`chain` 会被拒绝，必须走 workflow 脚本，二选一：");
+		lines.push("  - 内联脚本：`subagent({ workflow: true })`，并在**同一条回复**的正文里带一个 ```js 块（形如 `return await runs.all([{ key: \"a\", agent: \"worker\", task: \"…\" }, …])`）。js 块必须和调用在同一条回复里，分开写会失败（真实发生过）。");
+		lines.push("  - 脚本文件：先让 worker 把脚本落成文件，再用 `subagent({ workflow: \"<脚本文件路径>\" })`。");
+		lines.push("- 命名 workflow（如 `run-ci`）会执行宿主命令，已被门禁拦下；要跑命令就派 verify 角色。");
+		lines.push("- 上面两种都失败时退回逐个单发：每个 `subagent({ agent, task })` 各自异步后台跑。");
+	}
 	lines.push("");
 
 	lines.push("### 缺工具不等于停住");
