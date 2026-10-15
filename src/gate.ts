@@ -93,7 +93,11 @@ export function modeStatusText(input: {
 	return `编排器模式：关闭（${input.mode}）｜原因：${why}｜${switchHint}`;
 }
 
-/** 只读命令白名单（前缀匹配）。默认只覆盖「看代码/看历史」，不放行跑测试与构建。 */
+/**
+ * 只读命令白名单（前缀匹配）。默认覆盖「看代码/看历史/切目录/只读文本处理」，不放行跑测试与构建。
+ * 前缀匹配天然只放行这两条 git config 子命令（普通 `git config user.name x` 写操作仍被拦）；
+ * `sed` 在名单里，但 `sed -i` 由 BASH_DENY_PATTERNS 挡在前面。
+ */
 export const DEFAULT_BASH_ALLOW: readonly string[] = [
 	"git status",
 	"git diff",
@@ -106,6 +110,15 @@ export const DEFAULT_BASH_ALLOW: readonly string[] = [
 	"git branch",
 	"git remote",
 	"git stash list",
+	"git config --get",
+	"git config --list",
+	"git describe",
+	"git shortlog",
+	"git reflog",
+	"git cat-file",
+	"git count-objects",
+	"git check-ignore",
+	"git hash-object",
 	"ls",
 	"cat",
 	"head",
@@ -120,6 +133,21 @@ export const DEFAULT_BASH_ALLOW: readonly string[] = [
 	"stat",
 	"file",
 	"which",
+	"cd",
+	"echo",
+	"sed",
+	"awk",
+	"sort",
+	"uniq",
+	"cut",
+	"tr",
+	"nl",
+	"jq",
+	"diff",
+	"cmp",
+	"sha256sum",
+	"sha1sum",
+	"md5sum",
 ];
 
 /** 无论如何都拒的模式：写入、破坏性操作、命令替换。 */

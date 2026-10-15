@@ -100,6 +100,31 @@ test("只读 bash：放行看代码/看历史，拦住写入与命令替换", ()
 	assert.ok(bashBlockReason("", config) === "空命令。");
 });
 
+test("只读 bash：补常用只读前缀（cd / sed -n / git config --get / git describe 等）", () => {
+	const config = defaultConfig();
+	config.bashPolicy = "allowlist";
+	assert.equal(bashBlockReason("cd ~/projects/pi-teammate && git log -1", config), undefined, "cd 分段后要看 git log");
+	assert.equal(bashBlockReason("sed -n 1,20p src/gate.ts", config), undefined, "sed -n 是只读打印");
+	assert.equal(bashBlockReason("git config --get user.name", config), undefined);
+	assert.equal(bashBlockReason("git config --list", config), undefined);
+	assert.equal(bashBlockReason("git describe --tags --always", config), undefined);
+	assert.equal(bashBlockReason("git cat-file -p HEAD", config), undefined);
+	assert.equal(bashBlockReason("echo done", config), undefined);
+	assert.equal(bashBlockReason("jq -r .name package.json", config), undefined);
+	assert.equal(bashBlockReason("sha256sum a.txt", config), undefined);
+	assert.equal(bashBlockReason("diff a.txt b.txt", config), undefined);
+});
+
+test("只读 bash：新增前缀不放宽写操作", () => {
+	const config = defaultConfig();
+	config.bashPolicy = "allowlist";
+	assert.ok(bashBlockReason("sed -i s/a/b/ f.txt", config)?.includes("写入/破坏性"), "sed -i 仍被拒模式挡住");
+	assert.ok(bashBlockReason("git config user.name x", config)?.includes("不在只读白名单里"), "普通 git config 写操作不在前缀里");
+	assert.ok(bashBlockReason("git config --unset user.name", config)?.includes("不在只读白名单里"));
+	assert.ok(bashBlockReason("echo hi > out.txt", config)?.includes("写入/破坏性"), "重定向仍被拒模式挡住");
+	assert.ok(bashBlockReason("git push origin main", config)?.includes("写入/破坏性"));
+});
+
 test("子代理工具并集剔除派发与管理类工具（禁止再往下派）", () => {
 	const allowed = childAllowedTools(["read", "bash", "subagent", "subagents_enable", "subagent_supervisor", "bg_wait", "orchestrator"]);
 	assert.deepEqual(allowed, ["read", "bash"]);

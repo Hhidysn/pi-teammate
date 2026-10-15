@@ -8,17 +8,19 @@
 
 ## 安装
 
-1. 装包（在 `~/.pi/agent/settings.json` 的 `packages` 里加一条）：
+1. 装包（会用 `~/.pi/agent/settings.json` 的 `packages` 记录来源）：
 
    ```bash
-   pi install F:/documents/software/pi-teammate
+   pi install git:github.com/Hhidysn/pi-teammate
    ```
 
 2. 装验证角色档案（可选但推荐，`verify` 角色默认映射到它）：
 
    ```bash
-   cp F:/documents/software/pi-teammate/agents/verifier.md ~/.pi/agent/agents/
+   cp ~/.pi/agent/git/github.com/Hhidysn/pi-teammate/agents/verifier.md ~/.pi/agent/agents/
    ```
+
+   路径说明：`pi install git:<host>/<user>/<repo>` 把仓库克隆到 `~/.pi/agent/git/<host>/<user>/<repo>`（本项目即 `~/.pi/agent/git/github.com/Hhidysn/pi-teammate`）；若改用 `pi install npm:...`，安装目录是 `~/.pi/agent/npm/node_modules/pi-teammate`。按你的实际安装目录替换上面的路径即可。
 
 ## 进入编排器模式
 
