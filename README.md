@@ -101,3 +101,7 @@ node --test test/gate.test.ts test/config.test.ts   # 门禁与配置的纯逻�
 ```
 
 契约与机制见 [docs/design.md](docs/design.md)。
+
+## License
+
+MIT

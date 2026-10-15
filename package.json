@@ -2,6 +2,7 @@
   "name": "pi-teammate",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "编排器模式：主代理只接需求、拆活、派活、核验与汇总，不写代码",
   "keywords": [
