@@ -157,13 +157,13 @@ function readDisabledFeatures(path: string): string[] | undefined {
  * pi-subagents 的 `workflow-scripts` 特性是否被禁用。
  * 它只在禁用 `workflow-scripts` 时才接受顶层 `tasks`/`chain`（见 pi-subagents
  * `public-execution.js` 的 `structuredWorkflows`）；未禁用时只接受 workflow 脚本。
- * 读用户级 `<agentDir>/extensions/subagent/config.json`；项目级 `<cwd>/.pi/extensions/subagent/config.json`
- * 定义了 `disabledFeatures` 时覆盖用户级。
+ * 只读用户级 `<agentDir>/extensions/subagent/config.json`——与 pi-subagents 运行时一致
+ * （它的加载器只用 `getAgentDir()` 拼路径，包内没有项目级加载器）。
+ * 文件缺失/非对象/字段非数组/坏 JSON 都按「未禁用」容错。
  */
-export function readWorkflowScriptsDisabled(agentDir: string, cwd: string): boolean {
-	const project = readDisabledFeatures(join(cwd, ".pi", ...SUBAGENT_CONFIG_RELATIVE));
+export function readWorkflowScriptsDisabled(agentDir: string): boolean {
 	const user = readDisabledFeatures(join(agentDir, ...SUBAGENT_CONFIG_RELATIVE));
-	return (project ?? user)?.includes("workflow-scripts") ?? false;
+	return user?.includes("workflow-scripts") ?? false;
 }
 
 export function defaultConfig(): TeammateConfig {

@@ -53,23 +53,42 @@ test("~ 展开", () => {
 	assert.equal(expandHome("C:/tmp/x"), "C:/tmp/x");
 });
 
-test("读 pi-subagents 的 workflow-scripts 开关（用户级 + 项目级覆盖）", () => {
+test("读 pi-subagents 的 workflow-scripts 开关（只认用户级，与运行时一致）", () => {
+	const root = mkdtempSync(join(tmpdir(), "pi-teammate-"));
+	try {
+		const agentDir = join(root, "agent");
+		const userPath = join(agentDir, "extensions", "subagent", "config.json");
+		mkdirSync(join(agentDir, "extensions", "subagent"), { recursive: true });
+
+		assert.equal(readWorkflowScriptsDisabled(agentDir), false, "无配置时默认未禁用");
+		writeFileSync(userPath, JSON.stringify({ disabledFeatures: ["workflow-scripts"] }));
+		assert.equal(readWorkflowScriptsDisabled(agentDir), true, "用户级禁用生效");
+		writeFileSync(userPath, JSON.stringify({ disabledFeatures: ["missions"] }));
+		assert.equal(readWorkflowScriptsDisabled(agentDir), false, "用户级未含 workflow-scripts 则未禁用");
+		writeFileSync(userPath, "{ not json");
+		assert.equal(readWorkflowScriptsDisabled(agentDir), false, "坏 JSON 忽略");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("项目级 pi-subagents 配置不影响判断（与运行时一致）", () => {
 	const root = mkdtempSync(join(tmpdir(), "pi-teammate-"));
 	try {
 		const agentDir = join(root, "agent");
 		const cwd = join(root, "proj");
-		const userPath = join(agentDir, "extensions", "subagent", "config.json");
 		const projectPath = join(cwd, ".pi", "extensions", "subagent", "config.json");
-		mkdirSync(join(agentDir, "extensions", "subagent"), { recursive: true });
 		mkdirSync(join(cwd, ".pi", "extensions", "subagent"), { recursive: true });
 
-		assert.equal(readWorkflowScriptsDisabled(agentDir, cwd), false, "无配置时默认未禁用");
+		// 项目级写了禁用，但用户级没有 → 判断不受影响
+		writeFileSync(projectPath, JSON.stringify({ disabledFeatures: ["workflow-scripts"] }));
+		assert.equal(readWorkflowScriptsDisabled(agentDir), false, "项目级 disabledFeatures 不参与判断");
+
+		// 用户级禁用时结果只由用户级决定
+		const userPath = join(agentDir, "extensions", "subagent", "config.json");
+		mkdirSync(join(agentDir, "extensions", "subagent"), { recursive: true });
 		writeFileSync(userPath, JSON.stringify({ disabledFeatures: ["workflow-scripts"] }));
-		assert.equal(readWorkflowScriptsDisabled(agentDir, cwd), true, "用户级禁用生效");
-		writeFileSync(projectPath, JSON.stringify({ disabledFeatures: ["missions"] }));
-		assert.equal(readWorkflowScriptsDisabled(agentDir, cwd), false, "项目级 disabledFeatures 覆盖用户级");
-		writeFileSync(userPath, "{ not json");
-		assert.equal(readWorkflowScriptsDisabled(agentDir, cwd), false, "坏 JSON 忽略");
+		assert.equal(readWorkflowScriptsDisabled(agentDir), true, "结果只由用户级决定");
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

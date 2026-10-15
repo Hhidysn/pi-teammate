@@ -63,11 +63,11 @@ export function isScriptPath(value: string): boolean {
 	return /[\\/]/.test(value) || /\.(js|mjs|cjs|ts|mts)$/i.test(value);
 }
 
-/** subagent 参数级准入的配置层：可注入 workflow-scripts 开关，默认读本机/项目配置。 */
+/** subagent 参数级准入的配置层：可注入 workflow-scripts 开关，默认读用户级配置。 */
 export interface SubagentBlockOptions {
 	/**
 	 * pi-subagents 的 `workflow-scripts` 是否被禁用。禁用时它接受顶层 `tasks`/`chain`，不接受脚本；
-	 * 未禁用（默认）时相反。默认读 `~/.pi/agent` 与 cwd 下的 pi-subagents 配置。
+	 * 未禁用（默认）时相反。默认读用户级 `~/.pi/agent/extensions/subagent/config.json`（与 pi-subagents 运行时一致）。
 	 */
 	workflowScriptsDisabled?: boolean;
 }
@@ -87,7 +87,7 @@ export function subagentBlockReason(
 	if (typeof input !== "object" || input === null) return undefined;
 	const record = input as Record<string, unknown>;
 	const workflowScriptsDisabled =
-		options?.workflowScriptsDisabled ?? readWorkflowScriptsDisabled(defaultAgentDir(), process.cwd());
+		options?.workflowScriptsDisabled ?? readWorkflowScriptsDisabled(defaultAgentDir());
 
 	const hasStructuredInput = record.tasks !== undefined || record.chain !== undefined;
 	const hasWorkflowInput = record.workflow !== undefined;

@@ -103,9 +103,9 @@ export default function piTeammateExtension(pi: ExtensionAPI): void {
 	}
 
 	/** pi-subagents 的 workflow-scripts 开关（决定并行/多步派发形态），与配置一起只算一次。 */
-	function ensureWorkflowScriptsDisabled(ctx: ExtensionContext): boolean {
+	function ensureWorkflowScriptsDisabled(): boolean {
 		if (workflowScriptsDisabled === undefined) {
-			workflowScriptsDisabled = readWorkflowScriptsDisabled(getAgentDir(), ctx.cwd);
+			workflowScriptsDisabled = readWorkflowScriptsDisabled(getAgentDir());
 		}
 		return workflowScriptsDisabled;
 	}
@@ -168,7 +168,7 @@ export default function piTeammateExtension(pi: ExtensionAPI): void {
 		state.previousTools = pi.getActiveTools();
 		const keep = keepList(cfg);
 		const referencesDirExists = cfg.referencesDir !== "" && existsSync(cfg.referencesDir);
-		state.policy = buildPolicy({ config: cfg, keepTools: keep, referencesDirExists, workflowScriptsDisabled: ensureWorkflowScriptsDisabled(ctx) });
+		state.policy = buildPolicy({ config: cfg, keepTools: keep, referencesDirExists, workflowScriptsDisabled: ensureWorkflowScriptsDisabled() });
 		pi.setActiveTools(keep);
 		state.engaged = true;
 		await registerCeiling(ctx, state, cfg);
@@ -322,7 +322,7 @@ export default function piTeammateExtension(pi: ExtensionAPI): void {
 			const keep = keepList(cfg);
 			if (!sameList(pi.getActiveTools(), keep)) pi.setActiveTools(keep);
 			event.systemPromptOptions.selectedTools = [...keep];
-			event.systemPromptOptions.sections[POLICY_SECTION] = state.policy ?? buildPolicy({ config: cfg, keepTools: keep, referencesDirExists: false, workflowScriptsDisabled: ensureWorkflowScriptsDisabled(ctx) });
+			event.systemPromptOptions.sections[POLICY_SECTION] = state.policy ?? buildPolicy({ config: cfg, keepTools: keep, referencesDirExists: false, workflowScriptsDisabled: ensureWorkflowScriptsDisabled() });
 		});
 	});
 
@@ -334,7 +334,7 @@ export default function piTeammateExtension(pi: ExtensionAPI): void {
 		if (reason) return { block: true, reason };
 		if (event.toolName === SUBAGENT_TOOL) {
 			const subagentReason = subagentBlockReason(event.input, cfg, {
-				workflowScriptsDisabled: ensureWorkflowScriptsDisabled(ctx),
+				workflowScriptsDisabled: ensureWorkflowScriptsDisabled(),
 			});
 			if (subagentReason) return { block: true, reason: subagentReason };
 		}
