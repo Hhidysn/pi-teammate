@@ -54,6 +54,18 @@ export function buildPolicy(input: PolicyInput): string {
 	}
 	lines.push("");
 
+	lines.push("#### GPT 系角色（architect / reviewer / verifier / oracle / ops / council-gpt）");
+	lines.push("- 用途：让它**挑错**是划算的；让它做**技术决策**、**UI/交互设计**、**长任务实现**必砸——UI 一律走 designer。");
+	lines.push("- 派活时写死：可核验的完成定义、允许影响的文件、不许提前停止（没做完就报没做完）、不许擅自 commit/push/开 PR、不许为「本地单人场景不可能发生的威胁」堆防御性检查。");
+	lines.push("- 收到它的审查/验证产出时，按**未验证的假设**处理，不是需求也不是 TODO：逐条自己判断是否成立、是否值得修。");
+	lines.push("  · 严重度不沿用它的（它几乎什么都标 blocker，多数是 nit）");
+	lines.push("  · 先验前提（它常缺项目背景，前提本身就是错的）");
+	lines.push("  · 安全模型对齐本项目（否则会给「自己攻击自己」堆防御——真实案例：本地单人 TUI 应用被加了十万行级别的信息脱敏，纯属浪费）");
+	lines.push("  · 核对范围（有没有提前停止、有没有擅自扩大/缩小你要求的范围、改动文件是否超出许可）");
+	lines.push("  · 不接受「测试全绿」作为正确性证明（拿测试固定错误行为也算）");
+	lines.push("- 它说的「完成/通过」不是证据：要命令、退出码、原始输出；不满足就退回重做，不要替它修补，也不要让它自己写交付说明。");
+	lines.push("");
+
 	lines.push("### 派活契约");
 	lines.push(
 		"- 每个简报写清：任务与目标、约束、验收标准、最小上下文与来源、允许影响的文件、要交回的证据、停止条件。",

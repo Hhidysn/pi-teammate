@@ -91,6 +91,8 @@ pi --tools read,grep,find,ls,subagent,bg_wait,web_search,fetch_content,source_ch
 - 拦掉：`bash`、`powershell`、`edit`、`write` 等一切白名单外的工具。
 - 子代理侧：注册 pi-subagents 的会话级能力天花板——只能派映射里的角色，且子代理拿不到派发工具（不会出现孙代理）。
 
+policy 里给 GPT 系角色（architect / reviewer / verifier / oracle / ops / council-gpt）单列了一节：GPT 系模型在技术决策/范围控制上不可靠，且审查时倾向过度防御（给不存在的威胁堆检查）。来源讨论：[https://linux.do/t/topic/3023041](https://linux.do/t/topic/3023041)。
+
 ## 已知边界
 
 - **编排器只有只读的「看」能力**：默认没有 bash；开了 `bashPolicy: "allowlist"` 也只能看（git 历史/diff、读文件、搜索），**跑不了测试**（`npm test`、`pwsh .../run_godot_tests.ps1` 这类入口不在默认名单里），也改不了文件。全量测试由 `verify` 角色跑并交回命令、cwd、退出码与输出位置；需要看代码分布时派 `scout`。
@@ -106,7 +108,7 @@ pi --tools read,grep,find,ls,subagent,bg_wait,web_search,fetch_content,source_ch
 ## 开发
 
 ```bash
-node --test test/gate.test.ts test/config.test.ts   # 门禁与配置的纯逻辑
+node --test test/gate.test.ts test/config.test.ts test/policy.test.ts   # 门禁、配置与 policy 文本的纯逻辑
 ```
 
 契约与机制见 [docs/design.md](docs/design.md)。
