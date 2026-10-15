@@ -81,7 +81,13 @@ pi --tools read,grep,find,ls,subagent,bg_wait,web_search,fetch_content,source_ch
 ## 编排器在模式内能做什么
 
 - 保留：`read`、`grep`、`find`、`ls`（看文件）、`web_search`、`fetch_content`、`source_check`（核一手来源）、`subagent`、`bg_wait`、`subagent_supervisor`（派活与收活）。
-- `bashPolicy: "allowlist"` 时额外给 `bash`，但**只放行只读命令**：`git status/diff/log/show/ls-files/branch`、`ls/cat/head/tail/wc/rg/grep/find/tree/stat` 等；重定向、`sed -i`、`rm/mv/cp`、`git commit/push`、包安装、`--fix/--write`、命令替换一律拦下。实测：`git log --oneline -2` 放行，`git push origin main` 被拦。
+- `bashPolicy: "allowlist"` 时额外给 `bash`，但**只放行只读命令**（前缀匹配，按组列全）：
+  - **git 查看类**：`git status`、`git diff`、`git log`、`git show`、`git ls-files`、`git ls-remote`、`git rev-parse`、`git blame`、`git branch`、`git remote`、`git stash list`、`git config --get`、`git config --list`、`git describe`、`git shortlog`、`git reflog`、`git cat-file`、`git count-objects`、`git check-ignore`、`git hash-object`。
+  - **文件查看类**：`ls`、`cat`、`head`、`tail`、`wc`、`tree`、`stat`、`file`、`du`、`df`、`bat`、`eza`。
+  - **文本处理类**：`rg`、`grep`、`find`、`fd`、`sed`、`awk`、`sort`、`uniq`、`cut`、`tr`、`nl`、`jq`、`diff`、`cmp`、`sha256sum`、`sha1sum`、`md5sum`。
+  - **导航与系统**：`pwd`、`cd`、`echo`、`which`、`whereis`、`type`、`date`、`uname`、`whoami`、`ps`、`node --version`、`python --version`、`npm list`、`npm ls`、`npm view`、`npm info`、`npm outdated`。
+  - **分段是引号感知的**：`&&`、`||`、`;`、换行、`|` 只在引号外才分段，所以 `rg -n "SAFE|isSafeCommand" -A 20 src/`、`grep -E 'a|b' src/` 不会被误切。
+  - 一律拦下：重定向（含引号内的 `>`，拒绝模式跑在原始命令串上、不做引号感知）、`sed -i`、`rm/mv/cp`、`git commit/push`、包安装、`--fix/--write`、命令替换。实测：`git log --oneline -2` 放行，`git push origin main` 被拦。
 - 拦掉：`bash`、`powershell`、`edit`、`write` 等一切白名单外的工具。
 - 子代理侧：注册 pi-subagents 的会话级能力天花板——只能派映射里的角色，且子代理拿不到派发工具（不会出现孙代理）。
 

@@ -94,63 +94,95 @@ export function modeStatusText(input: {
 }
 
 /**
- * 只读命令白名单（前缀匹配）。默认覆盖「看代码/看历史/切目录/只读文本处理」，不放行跑测试与构建。
- * 前缀匹配天然只放行这两条 git config 子命令（普通 `git config user.name x` 写操作仍被拦）；
- * `sed` 在名单里，但 `sed -i` 由 BASH_DENY_PATTERNS 挡在前面。
+ * 只读命令白名单（前缀匹配），按组维护。提示词（policy）与拒绝文案都从这份分组生成，
+ * 避免出现「…等」这种与实际名单对不上的说法。默认覆盖「git 查看 / 文件查看 / 文本处理 / 导航与系统」，
+ * 不放行跑测试与构建。
+ * 前缀匹配天然只放行 `git config --get`、`git config --list` 两条 git config 子命令
+ * （普通 `git config user.name x` 写操作仍被拦）；`sed` 在名单里，但 `sed -i` 由 BASH_DENY_PATTERNS 挡在前面。
  */
-export const DEFAULT_BASH_ALLOW: readonly string[] = [
-	"git status",
-	"git diff",
-	"git log",
-	"git show",
-	"git ls-files",
-	"git ls-remote",
-	"git rev-parse",
-	"git blame",
-	"git branch",
-	"git remote",
-	"git stash list",
-	"git config --get",
-	"git config --list",
-	"git describe",
-	"git shortlog",
-	"git reflog",
-	"git cat-file",
-	"git count-objects",
-	"git check-ignore",
-	"git hash-object",
-	"ls",
-	"cat",
-	"head",
-	"tail",
-	"wc",
-	"rg",
-	"grep",
-	"find",
-	"fd",
-	"tree",
-	"pwd",
-	"stat",
-	"file",
-	"which",
-	"cd",
-	"echo",
-	"sed",
-	"awk",
-	"sort",
-	"uniq",
-	"cut",
-	"tr",
-	"nl",
-	"jq",
-	"diff",
-	"cmp",
-	"sha256sum",
-	"sha1sum",
-	"md5sum",
+export const BASH_ALLOW_GROUPS: readonly { readonly label: string; readonly prefixes: readonly string[] }[] = [
+	{
+		label: "git 查看类",
+		prefixes: [
+			"git status",
+			"git diff",
+			"git log",
+			"git show",
+			"git ls-files",
+			"git ls-remote",
+			"git rev-parse",
+			"git blame",
+			"git branch",
+			"git remote",
+			"git stash list",
+			"git config --get",
+			"git config --list",
+			"git describe",
+			"git shortlog",
+			"git reflog",
+			"git cat-file",
+			"git count-objects",
+			"git check-ignore",
+			"git hash-object",
+		],
+	},
+	{
+		label: "文件查看类",
+		prefixes: ["ls", "cat", "head", "tail", "wc", "tree", "stat", "file", "du", "df", "bat", "eza"],
+	},
+	{
+		label: "文本处理类",
+		prefixes: [
+			"rg",
+			"grep",
+			"find",
+			"fd",
+			"sed",
+			"awk",
+			"sort",
+			"uniq",
+			"cut",
+			"tr",
+			"nl",
+			"jq",
+			"diff",
+			"cmp",
+			"sha256sum",
+			"sha1sum",
+			"md5sum",
+		],
+	},
+	{
+		label: "导航与系统",
+		prefixes: [
+			"pwd",
+			"cd",
+			"echo",
+			"which",
+			"whereis",
+			"type",
+			"date",
+			"uname",
+			"whoami",
+			"ps",
+			"node --version",
+			"python --version",
+			"npm list",
+			"npm ls",
+			"npm view",
+			"npm info",
+			"npm outdated",
+		],
+	},
 ];
 
-/** 无论如何都拒的模式：写入、破坏性操作、命令替换。 */
+/** 默认只读名单 = 上面四组展开；准入判定与 policy 文案同源。 */
+export const DEFAULT_BASH_ALLOW: readonly string[] = BASH_ALLOW_GROUPS.flatMap((group) => group.prefixes);
+
+/**
+ * 无论如何都拒的模式：写入、破坏性操作、命令替换。与 pi 自带 plan-mode 的 DESTRUCTIVE_PATTERNS 对齐。
+ * 注意：这些模式跑在**原始命令串**上（不做引号感知）——引号内的 `>`、反引号同样会被拦下，这是刻意的保守行为。
+ */
 const BASH_DENY_PATTERNS: readonly RegExp[] = [
 	/[\$`]\s*\(/, // $( ) 与 ` 命令替换
 	/[<>]\s*\(/, // <( ) / >( ) 进程替换
@@ -158,16 +190,75 @@ const BASH_DENY_PATTERNS: readonly RegExp[] = [
 	/\|\s*tee\b/,
 	/\bsed\s+-i/,
 	/\bperl\s+-i/,
-	/\b(rm|rmdir|mv|cp|mkdir|touch|chmod|chown|truncate|dd|ln)\b/,
-	/\bgit\s+(add|commit|push|checkout|switch|reset|clean|apply|restore|rm|mv|stash\s+(pop|drop|clear))\b/,
+	/\b(rm|rmdir|mv|cp|mkdir|touch|chmod|chown|chgrp|truncate|dd|ln|shred)\b/,
+	/\bgit\s+(add|commit|push|pull|merge|rebase|cherry-pick|revert|tag|init|clone|checkout|switch|reset|clean|apply|restore|rm|mv|stash\s+(pop|drop|clear))\b/,
 	/\bgit\s+branch\s+-[dDmM]/,
-	/\b(npm|pnpm|yarn|bun)\s+(i|install|ci|add|remove|uninstall)\b/,
+	/\b(npm|pnpm|yarn|bun)\s+(i|install|ci|add|remove|uninstall|update|link|publish)\b/, // 含 yarn/pnpm (add|remove|install|publish)
 	/\bpip3?\s+install\b/,
+	/\bapt(-get)?\s+(install|remove|purge|upgrade)\b/,
+	/\bbrew\s+(install|uninstall|upgrade)\b/,
+	/\b(sudo|su)\b/,
+	/\b(kill|pkill|killall)\b/,
+	/\b(reboot|shutdown)\b/,
+	/\bsystemctl\s+(start|stop|restart|enable|disable)\b/,
+	/\bservice\s+\S+\s+(start|stop|restart)\b/,
+	/\b(vim|vi|nano|emacs|code|subl)\b/, // 交互式编辑器
 	/--(fix|write|output|out-dir|emit)\b/,
 ];
 
 /**
- * 只读 bash 准入：把命令按 && / || / ; / 换行 / 管道拆段，逐段查拒绝模式与白名单。
+ * 只在引号外切分 `||`、`&&`、`;`、换行与管道 `|`。
+ * 引号内的这些符号是命令参数（`rg -n "a|b" src/`、`grep -E 'x|y'`），不是分段边界。
+ * 单引号内不转义；双引号与反引号内 `\` 转义下一个字符。
+ */
+export function splitCommandSegments(command: string): string[] {
+	const segments: string[] = [];
+	let current = "";
+	let quote: "'" | '"' | "`" | undefined;
+	for (let i = 0; i < command.length; i++) {
+		const char = command[i];
+		if (quote !== undefined) {
+			current += char;
+			if (quote === "'") {
+				if (char === "'") quote = undefined;
+			} else if (char === "\\" && i + 1 < command.length) {
+				current += command[i + 1];
+				i++;
+			} else if (char === quote) {
+				quote = undefined;
+			}
+			continue;
+		}
+		if (char === "'" || char === '"' || char === "`") {
+			quote = char;
+			current += char;
+			continue;
+		}
+		if (char === "\\" && i + 1 < command.length) {
+			current += char + command[i + 1];
+			i++;
+			continue;
+		}
+		const pair = command.slice(i, i + 2);
+		if (pair === "||" || pair === "&&") {
+			segments.push(current);
+			current = "";
+			i++;
+			continue;
+		}
+		if (char === ";" || char === "\n" || char === "|") {
+			segments.push(current);
+			current = "";
+			continue;
+		}
+		current += char;
+	}
+	segments.push(current);
+	return segments.map((segment) => segment.trim()).filter((segment) => segment !== "");
+}
+
+/**
+ * 只读 bash 准入：先在**原始命令串**上查拒绝模式，再用引号感知分段逐段查只读白名单。
  * 这是启发式，不保证：被放行的命令（以及它们调起的项目脚本）仍可能写文件。
  */
 export function bashBlockReason(command: unknown, config: TeammateConfig): string | undefined {
@@ -176,13 +267,12 @@ export function bashBlockReason(command: unknown, config: TeammateConfig): strin
 		if (pattern.test(command)) return `命令里含写入/破坏性/命令替换模式（${pattern.source}），编排器模式下已禁用。要看结论请派 verify 角色。`;
 	}
 	const allowed = [...DEFAULT_BASH_ALLOW, ...config.bashAllow];
-	const segments = command
-		.split(/\|\||&&|;|\n|\|/)
-		.map((segment) => segment.trim())
-		.filter((segment) => segment !== "");
-	for (const segment of segments) {
+	const groups = BASH_ALLOW_GROUPS.map((group) => group.label).join("、");
+	for (const segment of splitCommandSegments(command)) {
 		const ok = allowed.some((prefix) => segment === prefix || segment.startsWith(`${prefix} `));
-		if (!ok) return `「${segment}」不在只读白名单里。编排器只能看（git 历史/diff、列目录、读文件、搜索）；跑测试或改东西请派 verify / worker。`;
+		if (!ok) {
+			return `「${segment}」不在只读白名单里。只读命令分四组：${groups}（完整前缀见 README「只读 bash」或配置 bashAllow）。编排器只能看（git 历史/diff、列目录、读文件、搜索）；命令被拦时不要反复重试或换写法绕过，改用等价的白名单命令，或派 verify / worker。`;
+		}
 	}
 	return undefined;
 }

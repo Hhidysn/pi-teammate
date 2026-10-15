@@ -1,5 +1,6 @@
 /** 编排器规则文本：进入模式时算一次，之后逐轮复用（保持提示前缀稳定）。 */
 import { ORCHESTRATOR_TOOL, ROLE_LABELS, ROLE_WHEN, type TeammateConfig } from "./config.ts";
+import { BASH_ALLOW_GROUPS } from "./gate.ts";
 
 export interface PolicyInput {
 	config: TeammateConfig;
@@ -25,8 +26,18 @@ export function buildPolicy(input: PolicyInput): string {
 	lines.push(`- 只有这些：${usable.join("、")}。其它调用会被硬拦（不是提示词约束）。`);
 	lines.push("- 派发工具已就绪，直接调 subagent；不要调用 subagents_enable。");
 	if (config.bashPolicy === "allowlist") {
+		lines.push("- bash 开了只读白名单（`bashPolicy: allowlist`），实际放行这些前缀（按组列全，无“等”）：");
+		for (const group of BASH_ALLOW_GROUPS) {
+			lines.push(`  - ${group.label}：${group.prefixes.join("、")}`);
+		}
+		if (config.bashAllow.length > 0) {
+			lines.push(`  - 配置额外放行（bashAllow）：${config.bashAllow.join("、")}`);
+		}
 		lines.push(
-			"- bash 开了只读白名单：`git status/diff/log/show/ls-files/branch`、`ls/cat/head/tail/wc/rg/grep/find/tree/stat` 等可用；重定向、`sed -i`、`rm/mv/cp`、`git commit/push`、包安装、`--fix/--write`、命令替换全部会被拦。想要跑测试或改东西，派对应角色。",
+			"- 其余一律拦下：重定向、`sed -i`、`rm/mv/cp`、`git commit/push`、包安装、`--fix/--write`、命令替换。想要跑测试或改东西，派对应角色。",
+		);
+		lines.push(
+			"- 命令被拦时不要反复重试或换写法绕过：改用等价的白名单命令，或派 verify / worker 去跑。",
 		);
 	}
 	lines.push("");

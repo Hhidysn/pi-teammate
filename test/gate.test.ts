@@ -7,6 +7,7 @@ import {
 	effectiveKeepTools,
 	modeStatusText,
 	shouldEngage,
+	splitCommandSegments,
 	subagentBlockReason,
 	toolBlockReason,
 } from "../src/gate.ts";
@@ -123,6 +124,108 @@ test("只读 bash：新增前缀不放宽写操作", () => {
 	assert.ok(bashBlockReason("git config --unset user.name", config)?.includes("不在只读白名单里"));
 	assert.ok(bashBlockReason("echo hi > out.txt", config)?.includes("写入/破坏性"), "重定向仍被拒模式挡住");
 	assert.ok(bashBlockReason("git push origin main", config)?.includes("写入/破坏性"));
+});
+
+test("只读 bash：分段器只在引号外切分", () => {
+	assert.deepEqual(splitCommandSegments('rg -n "a|b" x && ls'), ['rg -n "a|b" x', "ls"]);
+	assert.deepEqual(splitCommandSegments("echo 'x|y'; pwd"), ["echo 'x|y'", "pwd"]);
+	assert.deepEqual(splitCommandSegments("echo a || echo b"), ["echo a", "echo b"]);
+	assert.deepEqual(splitCommandSegments("a;b\nc|d"), ["a", "b", "c", "d"]);
+	assert.deepEqual(splitCommandSegments("echo \"it's\""), ["echo \"it's\""], "双引号内的单引号不结束引号");
+});
+
+test("只读 bash：引号内的 | 不切段（真实故障：rg -n \"SAFE|isSafeCommand\"）", () => {
+	const config = defaultConfig();
+	config.bashPolicy = "allowlist";
+	assert.equal(bashBlockReason('rg -n "SAFE|isSafeCommand" -A 20 src/', config), undefined);
+	assert.equal(bashBlockReason("grep -E 'a|b' src/", config), undefined);
+	assert.equal(bashBlockReason("git diff | head", config), undefined, "引号外的单管道仍拆段，两段都在名单里则放行");
+	assert.ok(bashBlockReason("cat a.txt | tee b.txt", config)?.includes("写入/破坏性"), "管道后的 tee 仍被拒");
+	assert.ok(bashBlockReason("ls | xargs rm -rf", config)?.includes("写入/破坏性"), "管道后的 rm 仍被拒");
+	assert.ok(
+		bashBlockReason('echo "a>b"', config)?.includes("写入/破坏性"),
+		"引号内的 > 仍被拒模式当成重定向：拒绝模式跑在原始命令串上，不做引号感知（保守拦下）",
+	);
+});
+
+test("只读 bash：新增只读前缀生效（du/df/系统/版本/包查询）", () => {
+	const config = defaultConfig();
+	config.bashPolicy = "allowlist";
+	for (const cmd of [
+		"du -sh src",
+		"df -h",
+		"whereis git",
+		"type node",
+		"date",
+		"uname -a",
+		"whoami",
+		"ps aux",
+		"bat src/gate.ts",
+		"eza -l",
+		"node --version",
+		"python --version",
+		"npm list",
+		"npm ls",
+		"npm view typescript",
+		"npm info react",
+		"npm outdated",
+	]) {
+		assert.equal(bashBlockReason(cmd, config), undefined, cmd);
+	}
+	for (const cmd of ["curl https://example.com", "wget https://example.com", "less src/gate.ts", "more src/gate.ts", "top", "htop"]) {
+		assert.ok(bashBlockReason(cmd, config)?.includes("不在只读白名单里"), `${cmd} 不应在名单里`);
+	}
+});
+
+test("只读 bash：新增拒绝模式（git 破坏性 / 提权 / 进程 / 服务 / 编辑器 / 包管理）", () => {
+	const config = defaultConfig();
+	config.bashPolicy = "allowlist";
+	for (const cmd of [
+		"git pull",
+		"git merge main",
+		"git rebase main",
+		"git cherry-pick abc123",
+		"git revert HEAD",
+		"git tag v1.0.0",
+		"git init",
+		"git clone https://example.com/x.git",
+		"sudo rm -rf /tmp/x",
+		"su root",
+		"kill -9 1234",
+		"pkill node",
+		"killall node",
+		"reboot",
+		"shutdown -h now",
+		"systemctl restart nginx",
+		"service nginx restart",
+		"vim src/gate.ts",
+		"vi src/gate.ts",
+		"nano src/gate.ts",
+		"emacs src/gate.ts",
+		"code .",
+		"subl src/",
+		"shred -u secret.txt",
+		"chgrp staff file.txt",
+		"ln -s a b",
+		"npm update",
+		"npm link",
+		"npm publish",
+		"npm uninstall left-pad",
+		"yarn add lodash",
+		"yarn publish",
+		"pnpm install",
+		"apt install curl",
+		"apt-get remove vim",
+		"apt purge nginx",
+		"apt-get upgrade",
+		"brew install jq",
+		"brew uninstall jq",
+		"brew upgrade",
+	]) {
+		assert.ok(bashBlockReason(cmd, config)?.includes("写入/破坏性"), cmd);
+	}
+	assert.equal(bashBlockReason("git status", config), undefined, "新增拒绝模式没误伤 git 查看类");
+	assert.equal(bashBlockReason("git describe --tags --always", config), undefined, "--tags 不被 git tag 规则误伤");
 });
 
 test("子代理工具并集剔除派发与管理类工具（禁止再往下派）", () => {
